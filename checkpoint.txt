@@ -87,10 +87,6 @@
 #include "oled_test.h"
 #include "Adafruit_SSD1351.h"
 
-#include "adc.h"
-#include "hw_adc.h"
-
-
 // Custom includes
 #include "utils/network_utils.h"
 
@@ -342,11 +338,11 @@ void main() {
 
             UART_PRINT("now servo");
 
-            pulse_speed(1000);
+            pulse_speed(0);
             delay(100);
             pulse_speed(2000);
             delay(100);
-            pulse_speed(1000);
+            pulse_speed(0);
 
             UART_PRINT("done servo");
 
@@ -363,7 +359,6 @@ void main() {
         // Only report when value switches from 0 to 1
         if (prev_value == 0 && value == 1) {
             Report("GPIO PA0.3 = %d\r\n", value);
-            fillScreen(BLACK);
 
             const char *msg1 = "Food is Empty";
             unsigned int m1 = strlen(msg1);
@@ -375,7 +370,7 @@ void main() {
                 drawChar(sx1 + 6*x, 56, msg1[x], WHITE, BLACK, 1);
             }
         }
-
+        
         // Update previous value for next iteration
         prev_value = value;
 

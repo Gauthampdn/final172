@@ -36,12 +36,12 @@
 //
 //*****************************************************************************
 
-// This file was automatically generated on 5/27/2025 at 10:52:54 PM
+// This file was automatically generated on 5/28/2025 at 12:18:03 PM
 // by TI PinMux version 1.15.0+2826
 //
 //*****************************************************************************
 
-#include "pinmux.h"
+#include "pin_mux_config.h"
 #include "hw_types.h"
 #include "hw_memmap.h"
 #include "hw_gpio.h"
@@ -58,15 +58,16 @@ void PinMuxConfig(void)
     // Set unused pins to PIN_MODE_0 with the exception of JTAG pins 16,17,19,20
     //
     PinModeSet(PIN_03, PIN_MODE_0);
+    PinModeSet(PIN_45, PIN_MODE_0);
     PinModeSet(PIN_52, PIN_MODE_0);
     PinModeSet(PIN_53, PIN_MODE_0);
-    PinModeSet(PIN_59, PIN_MODE_0);
     PinModeSet(PIN_63, PIN_MODE_0);
     PinModeSet(PIN_64, PIN_MODE_0);
 
     //
     // Enable Peripheral Clocks 
     //
+    PRCMPeripheralClkEnable(PRCM_ADC, PRCM_RUN_MODE_CLK);
     PRCMPeripheralClkEnable(PRCM_GPIOA0, PRCM_RUN_MODE_CLK);
     PRCMPeripheralClkEnable(PRCM_GPIOA1, PRCM_RUN_MODE_CLK);
     PRCMPeripheralClkEnable(PRCM_GPIOA2, PRCM_RUN_MODE_CLK);
@@ -76,16 +77,15 @@ void PinMuxConfig(void)
     PRCMPeripheralClkEnable(PRCM_UARTA0, PRCM_RUN_MODE_CLK);
 
     //
-    // Configure PIN_57 for GPIO Input
+    // Configure PIN_59 for ADC0 ADC_CH2
     //
-    PinTypeGPIO(PIN_57, PIN_MODE_0, false);
-    GPIODirModeSet(GPIOA0_BASE, 0x4, GPIO_DIR_MODE_IN);
+    PinTypeADC(PIN_59, PIN_MODE_255);
 
     //
-    // Configure PIN_58 for GPIO Input
+    // Configure PIN_58 for GPIO Output
     //
     PinTypeGPIO(PIN_58, PIN_MODE_0, false);
-    GPIODirModeSet(GPIOA0_BASE, 0x8, GPIO_DIR_MODE_IN);
+    GPIODirModeSet(GPIOA0_BASE, 0x8, GPIO_DIR_MODE_OUT);
 
     //
     // Configure PIN_60 for GPIO Input
@@ -169,7 +169,7 @@ void PinMuxConfig(void)
     PinTypeUART(PIN_55, PIN_MODE_3);
 
     //
-    // Configure PIN_45 for UART0 UART0_RX
+    // Configure PIN_57 for UART0 UART0_RX
     //
-    PinTypeUART(PIN_45, PIN_MODE_9);
+    PinTypeUART(PIN_57, PIN_MODE_3);
 }
