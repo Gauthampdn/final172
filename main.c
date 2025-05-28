@@ -78,6 +78,11 @@
 #include "common.h"
 #include "uart_if.h"
 
+#include "Adafruit_GFX.h"
+#include "glcdfont.h"
+#include "oled_test.h"
+#include "Adafruit_SSD1351.h"
+
 // Custom includes
 #include "utils/network_utils.h"
 
@@ -85,8 +90,8 @@
 #define DATE                27    /* Current Date */
 #define MONTH               5     /* Month 1-12 */
 #define YEAR                2025  /* Current year */
-#define HOUR                18    /* Time - hours */
-#define MINUTE              21    /* Time - minutes */
+#define HOUR                22    /* Time - hours */
+#define MINUTE              23    /* Time - minutes */
 #define SECOND              0     /* Time - seconds */
 
 
@@ -108,8 +113,7 @@
             "\"state\": {\r\n"                                              \
                 "\"desired\" : {\r\n"                                       \
                     "\"var\" :\""                                           \
-                        "Hello phone, "                                     \
-                        "message from CC3200 via AWS IoT!"                  \
+                        "Dispensing food"                                   \
                         "\"\r\n"                                            \
                 "}"                                                         \
             "}"                                                             \
@@ -241,7 +245,29 @@ void main() {
     if(lRetVal < 0) {
         ERR_PRINT(lRetVal);
     }
+
+
+
     http_post(lRetVal);
+
+    fillScreen(BLACK);
+
+
+    const char *msg1 = "Dispensing Food";
+    unsigned int m1 = strlen(msg1);
+
+    // center GAME OVER on row 56
+    unsigned int sx1 = (128 - 6*m1) / 2;
+    unsigned int x;
+    for(x = 0; x < m1; x++)
+    {
+        drawChar(sx1 + 6*x, 56, msg1[x], WHITE, BLACK, 1);
+    }
+
+    delay(1000000);
+
+    UART_PRINT("drew thing");
+
 
     sl_Stop(SL_STOP_TIMEOUT);
     LOOP_FOREVER();
