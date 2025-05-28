@@ -462,13 +462,13 @@ void drawChar(int x, int y, unsigned char c,
         if (size == 1) // default size
           drawPixel(x+i, y+j, color);
         else {  // big size
-          fillRect(x+(i*size), y+(j*size), size, size, color);
+          fillRect((unsigned int)(x+(i*size)), (unsigned int)(y+(j*size)), (unsigned int)size, (unsigned int)size, color);
         } 
       } else if (bg != color) {
         if (size == 1) // default size
           drawPixel(x+i, y+j, bg);
         else {  // big size
-          fillRect(x+i*size, y+j*size, size, size, bg);
+          fillRect((unsigned int)(x+i*size), (unsigned int)(y+j*size), (unsigned int)size, (unsigned int)size, bg);
         }
       }
       line >>= 1;

@@ -64,6 +64,8 @@
 
 //Driverlib includes
 #include "hw_types.h"
+#include "hw_memmap.h"
+
 #include "hw_ints.h"
 #include "rom.h"
 #include "rom_map.h"
@@ -71,6 +73,8 @@
 #include "prcm.h"
 #include "utils.h"
 #include "uart.h"
+#include "spi.h"
+
 
 //Common interface includes
 #include "pinmux.h"
@@ -86,12 +90,24 @@
 // Custom includes
 #include "utils/network_utils.h"
 
+
+//  function delays 3*ulCount cycles
+static void delay(unsigned long ulCount){
+    int i;
+
+  do{
+    ulCount--;
+        for (i=0; i< 65535; i++) ;
+    }while(ulCount);
+}
+
+
 //NEED TO UPDATE THIS FOR IT TO WORK!
 #define DATE                27    /* Current Date */
 #define MONTH               5     /* Month 1-12 */
 #define YEAR                2025  /* Current year */
 #define HOUR                22    /* Time - hours */
-#define MINUTE              23    /* Time - minutes */
+#define MINUTE              58    /* Time - minutes */
 #define SECOND              0     /* Time - seconds */
 
 
@@ -100,6 +116,10 @@
 #define SERVER_NAME           "as38mk89cstxi-ats.iot.us-west-1.amazonaws.com" // CHANGE ME
 #define GOOGLE_DST_PORT       8443
 
+#define SPI_IF_BIT_RATE  1000000
+#define TR_BUFF_SIZE     100
+
+#define SW3_PRESSED          (GPIOPinRead(GPIOA1_BASE, 0x20) == 0x20)
 
 
 #define POSTHEADER "POST /things/Gautham_CC3200_board/shadow HTTP/1.1\r\n"             // CHANGE ME
@@ -175,6 +195,37 @@ static void BoardInit(void) {
 }
 
 
+void MasterMain()
+{
+    //
+    // Reset SPI
+    //
+    MAP_SPIReset(GSPI_BASE);
+
+    //
+    // Configure SPI interface
+    //
+    MAP_SPIConfigSetExpClk(GSPI_BASE,MAP_PRCMPeripheralClockGet(PRCM_GSPI),
+                     SPI_IF_BIT_RATE,SPI_MODE_MASTER,SPI_SUB_MODE_0,
+                     (SPI_SW_CTRL_CS |
+                     SPI_4PIN_MODE |
+                     SPI_TURBO_OFF |
+                     SPI_CS_ACTIVEHIGH |
+                     SPI_WL_8));
+
+    //
+    // Enable SPI for communication
+    //
+    MAP_SPIEnable(GSPI_BASE);
+
+    // Add a small delay before initialization
+    delay(100);
+    Adafruit_Init();
+
+    // Clear the display
+    fillScreen(BLACK);
+    delay(100);
+}
 
 
 //*****************************************************************************
@@ -224,6 +275,8 @@ void main() {
 
     PinMuxConfig();
 
+    MasterMain();
+
     InitTerm();
     ClearTerm();
     UART_PRINT("My terminal works!\n\r");
@@ -246,28 +299,37 @@ void main() {
         ERR_PRINT(lRetVal);
     }
 
+    // Main loop - only execute when SW3 is pressed
+    while(1) {
+        if(SW3_PRESSED) {
+            http_post(lRetVal);
 
+            UART_PRINT("trying to draw ");
 
-    http_post(lRetVal);
+            // Initialize the OLED display
+            fillScreen(BLACK);
 
-    fillScreen(BLACK);
+            const char *msg1 = "Dispensing Food";
+            unsigned int m1 = strlen(msg1);
 
+            // center GAME OVER on row 56
+            unsigned int sx1 = (128 - 6*m1) / 2;
+            unsigned int x;
+            for(x = 0; x < m1; x++)
+            {
+                drawChar(sx1 + 6*x, 56, msg1[x], WHITE, BLACK, 1);
+            }
 
-    const char *msg1 = "Dispensing Food";
-    unsigned int m1 = strlen(msg1);
+            UART_PRINT("drew thing");
+            
+            // Add a small delay to prevent rapid repeated execution
+            delay(100);
+        }
 
-    // center GAME OVER on row 56
-    unsigned int sx1 = (128 - 6*m1) / 2;
-    unsigned int x;
-    for(x = 0; x < m1; x++)
-    {
-        drawChar(sx1 + 6*x, 56, msg1[x], WHITE, BLACK, 1);
+        fillScreen(RED);
+
+        // Small delay to prevent busy waiting
     }
-
-    delay(1000000);
-
-    UART_PRINT("drew thing");
-
 
     sl_Stop(SL_STOP_TIMEOUT);
     LOOP_FOREVER();
