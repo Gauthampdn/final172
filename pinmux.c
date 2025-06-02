@@ -36,12 +36,12 @@
 //
 //*****************************************************************************
 
-// This file was automatically generated on 5/28/2025 at 12:18:03 PM
+// This file was automatically generated on 6/1/2025 at 6:29:32 PM
 // by TI PinMux version 1.15.0+2826
 //
 //*****************************************************************************
 
-#include "pin_mux_config.h"
+#include "pinmux.h"
 #include "hw_types.h"
 #include "hw_memmap.h"
 #include "hw_gpio.h"
@@ -61,8 +61,6 @@ void PinMuxConfig(void)
     PinModeSet(PIN_45, PIN_MODE_0);
     PinModeSet(PIN_52, PIN_MODE_0);
     PinModeSet(PIN_53, PIN_MODE_0);
-    PinModeSet(PIN_63, PIN_MODE_0);
-    PinModeSet(PIN_64, PIN_MODE_0);
 
     //
     // Enable Peripheral Clocks 
@@ -82,16 +80,27 @@ void PinMuxConfig(void)
     PinTypeADC(PIN_59, PIN_MODE_255);
 
     //
+    // Configure PIN_60 for ADC0 ADC_CH3
+    //
+    PinTypeADC(PIN_60, PIN_MODE_255);
+
+    //
     // Configure PIN_58 for GPIO Output
     //
     PinTypeGPIO(PIN_58, PIN_MODE_0, false);
     GPIODirModeSet(GPIOA0_BASE, 0x8, GPIO_DIR_MODE_OUT);
 
     //
-    // Configure PIN_60 for GPIO Input
+    // Configure PIN_63 for GPIO Input
     //
-    PinTypeGPIO(PIN_60, PIN_MODE_0, false);
-    GPIODirModeSet(GPIOA0_BASE, 0x20, GPIO_DIR_MODE_IN);
+    PinTypeGPIO(PIN_63, PIN_MODE_0, false);
+    GPIODirModeSet(GPIOA1_BASE, 0x1, GPIO_DIR_MODE_IN);
+
+    //
+    // Configure PIN_64 for GPIO Input
+    //
+    PinTypeGPIO(PIN_64, PIN_MODE_0, false);
+    GPIODirModeSet(GPIOA1_BASE, 0x2, GPIO_DIR_MODE_IN);
 
     //
     // Configure PIN_04 for GPIO Input

@@ -59,6 +59,8 @@
 
 #include <stdio.h>
 
+
+
 // Simplelink includes
 #include "simplelink.h"
 
@@ -107,12 +109,14 @@ static void delay(unsigned long ulCount){
 
 
 //NEED TO UPDATE THIS FOR IT TO WORK!
-#define DATE                28    /* Current Date */
-#define MONTH               5     /* Month 1-12 */
+#define DATE                1    /* Current Date */
+#define MONTH               6     /* Month 1-12 */
 #define YEAR                2025  /* Current year */
-#define HOUR                11    /* Time - hours */
-#define MINUTE              25    /* Time - minutes */
+#define HOUR                17    /* Time - hours */
+#define MINUTE              48    /* Time - minutes */
 #define SECOND              0     /* Time - seconds */
+
+
 
 
 #define APPLICATION_NAME      "SSL"
@@ -147,6 +151,136 @@ static void delay(unsigned long ulCount){
             "}"                                                             \
         "}\r\n\r\n"
 
+// Dog ASCII art data (128 lines)
+const char* dogArt[128] = {
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "                                                                                                   ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                732555555221                                        125555555227                                                                      ",
+    "                          149696666666666666666699941                        149969666666666666666699941                                                               ",
+    "                      3996666699696445555446996999966666663  73255237  3666666666999966445555446699699666663                                                           ",
+    "                  3696996665                    79666666999999996699699966666667                    5666666663                                                        ",
+    "                5966996                      36966666669699666666999999966666669961                      6996695                                                      ",
+    "              1966993                      4966699962                      2699969664                      3996991                                                    ",
+    "              699961                      69966641                              14699696                      199996                                                   ",
+    "            796665                      399969                                      696663                      469997                                                 ",
+    "          79969                       26669                                          69692                       66697                                                ",
+    "          9999                       36966                                            69693                       9999                                                ",
+    "          6666                        6969                                              6666                        6996                                               ",
+    "          9665                       46693                                              36994                       4666                                               ",
+    "        49691                       6669                                                9999                       19664                                              ",
+    "        6999                        9666                                                6999                        9666                                              ",
+    "        9999                       26662                                                26993                       6669                                              ",
+    "        9999                       5966                                                  9695                       6666                                              ",
+    "        56693                      4666                                                  9664                      39665                                              ",
+    "        76662                      6996                                                  6666                      29667                                              ",
+    "          9664                      9994                                                  4666                      4999                                               ",
+    "          6666                      9995                                                  5666                      6966                                               ",
+    "          4669                     29993                                                  36692                     9994                                               ",
+    "          26697                    69967                                                   6696                    79992                                               ",
+    "          36695                    9999                                                    6699                    59993                                               ",
+    "          6696                    6666                                                    6999                    6999                                                ",
+    "          6696                   26693                                                    39992                   6699                                                ",
+    "          69997                  6666                                                      9996                  76696                                                ",
+    "          79995                 76664        3999962                        2699963        46997                 46667                                                ",
+    "            46667                6969        466666665                      566666694        9669                79664                                                 ",
+    "            96997              49995        999966996                      666666669        29964              79969                                                  ",
+    "              69964            99664         769966663                      266666697         59699            49666                                                   ",
+    "              996664       5966692            36992                          26963            3999962       499699                                                    ",
+    "                79669699669999965                                                                59699666969999997                                                     ",
+    "                  26966666965                                                                      56666669962                                                        ",
+    "                      76996                                                                            66667                                                           ",
+    "                      29961                                354669966453                                16662                                                           ",
+    "                      4999                              699666666666699696                              9664                                                           ",
+    "                      6996                             69666666666666666966                             6666                                                           ",
+    "                      6666                             19666666666666666993                             6666                                                           ",
+    "                      4999                               9966666666666666                               6664                                                           ",
+    "                      5996                                 169666669961                                 6665                                                           ",
+    "                      16996                                   299662                                   69661                                                           ",
+    "                      99997                           42      9666      54                           79966                                                            ",
+    "                        6666                       4           5695          74                       6999                                                             ",
+    "                        26966                                   69                                   66662                                                             ",
+    "                        66996                                  96                                  66666                                                              ",
+    "                          56699                                 66                                 66965                                                               ",
+    "                          196665                              5965                              596991                                                                ",
+    "                            699994                        169996999961                        499996                                                                  ",
+    "                              19966994                1669966996669669966661                46996991                                                                   ",
+    "                                66999669665525546666666699997      76999966666664552546966669996                                                                      ",
+    "                                    569999999999999969962                266696699999999999695                                                                         ",
+    "                                        3544444527                            7254444453                                                                              ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      ",
+    "                                                                                                                                                                      "
+};
+
 
 //*****************************************************************************
 //                 GLOBAL VARIABLES -- Start
@@ -170,6 +304,10 @@ extern uVectorEntry __vector_table;
 static int set_time();
 static void BoardInit(void);
 static int http_post(int);
+static void InitializeADC(void);
+static unsigned long ReadADCChannel2(void);
+static unsigned long ReadADCChannel0(void);
+static void drawDogArt(void);
 
 //*****************************************************************************
 //
@@ -208,6 +346,109 @@ static void pulse_speed(int us_high) {
     UtilsDelay(DELAY_COUNTS_PER_US * us_high);
     MAP_GPIOPinWrite(GPIOA0_BASE, SERVO_PIN_MASK, 0);
     UtilsDelay(DELAY_COUNTS_PER_US * (20000 - us_high));
+}
+
+//*****************************************************************************
+//
+//! Initialize ADC
+//!
+//! \param  None
+//!
+//! \return None
+//
+//*****************************************************************************
+static void InitializeADC(void) {
+    // Enable ADC channel 0 (PIN_57)
+    MAP_ADCChannelEnable(ADC_BASE, ADC_CH_0);
+    
+    // Enable ADC channel 2 (PIN_59)
+    MAP_ADCChannelEnable(ADC_BASE, ADC_CH_2);
+    
+    // Configure internal timer for time stamping (optional)
+    MAP_ADCTimerConfig(ADC_BASE, 80000);
+    MAP_ADCTimerEnable(ADC_BASE);
+    
+    // Enable the ADC module
+    MAP_ADCEnable(ADC_BASE);
+}
+
+//*****************************************************************************
+//
+//! Read ADC Channel 0
+//!
+//! \param  None
+//!
+//! \return ADC sample value (12-bit)
+//
+//*****************************************************************************
+static unsigned long ReadADCChannel0(void) {
+    unsigned long ulSample = 0;
+    
+    // Check if data is available in FIFO
+    if(MAP_ADCFIFOLvlGet(ADC_BASE, ADC_CH_0)) {
+        // Read the sample from FIFO
+        ulSample = MAP_ADCFIFORead(ADC_BASE, ADC_CH_0);
+        
+        // Extract the 12-bit ADC sample from bits [13:2]
+        ulSample = (ulSample & 0x3FFC) >> 2;
+    }
+    
+    return ulSample;
+}
+
+//*****************************************************************************
+//
+//! Read ADC Channel 2
+//!
+//! \param  None
+//!
+//! \return ADC sample value (12-bit)
+//
+//*****************************************************************************
+static unsigned long ReadADCChannel2(void) {
+    unsigned long ulSample = 0;
+    
+    // Check if data is available in FIFO
+    if(MAP_ADCFIFOLvlGet(ADC_BASE, ADC_CH_2)) {
+        // Read the sample from FIFO
+        ulSample = MAP_ADCFIFORead(ADC_BASE, ADC_CH_2);
+        
+        // Extract the 12-bit ADC sample from bits [13:2]
+        ulSample = (ulSample & 0x3FFC) >> 2;
+    }
+    
+    return ulSample;
+}
+
+//*****************************************************************************
+//
+//! Draw Dog ASCII Art using drawPixel
+//!
+//! \param  None
+//!
+//! \return None
+//
+//*****************************************************************************
+static void drawDogArt(void) {
+    int y, x;
+    
+    // Clear the screen first
+    
+    // Go through each line of the dog art
+    for(y = 0; y < 128; y++) {
+        const char* line = dogArt[y];
+        int lineLength = strlen(line);
+        
+        // Go through each character in the line (left to right)
+        for(x = 0; x < lineLength && x < 128; x++) {
+            char ch = line[x];
+            
+            // If character is not a space, draw a white pixel
+            if(ch != ' ' && ch != '\0') {
+                drawPixel(x, y, WHITE);
+            }
+        }
+    }
 }
 
 void MasterMain()
@@ -292,6 +533,9 @@ void main() {
 
     MasterMain();
 
+    // Initialize ADC
+    InitializeADC();
+
 //    MAP_PRCMPeripheralClkEnable(PRCM_GPIOA0, PRCM_RUN_MODE_CLK);
 
 
@@ -321,7 +565,10 @@ void main() {
     int prev_value = 0;
 
     // Main loop - only execute when SW3 is pressed
+    pulse_speed(2000);
+
     while(1) {
+
         if(SW3_PRESSED) {
             http_post(lRetVal);
 
@@ -339,14 +586,14 @@ void main() {
             {
                 drawChar(sx1 + 6*x, 56, msg1[x], WHITE, BLACK, 1);
             }
+                        delay(100);
 
             UART_PRINT("now servo");
 
-            pulse_speed(1000);
+
+            pulse_speed(1500);
             delay(100);
             pulse_speed(2000);
-            delay(100);
-            pulse_speed(1000);
 
             UART_PRINT("done servo");
 
@@ -379,11 +626,14 @@ void main() {
         // Update previous value for next iteration
         prev_value = value;
 
-        // small delay so output isn't overwhelming
-        delay(200);
+        // Read ADC Channel 0 and Channel 2 and print the values
+        unsigned long adcValue0 = ReadADCChannel0();
+        unsigned long adcValue2 = ReadADCChannel2();
+        UART_PRINT("ADC Channel 0 (PIN_57) value: %lu\r\n", adcValue0);
+        UART_PRINT("ADC Channel 2 (PIN_59) value: %lu\r\n", adcValue2);
 
-
-        fillScreen(RED);
+        // Draw the dog art instead of filling screen with red
+        drawDogArt();
 
         // Small delay to prevent busy waiting
     }
