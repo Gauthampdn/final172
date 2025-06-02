@@ -306,7 +306,7 @@ static void BoardInit(void);
 static int http_post(int);
 static void InitializeADC(void);
 static unsigned long ReadADCChannel2(void);
-static unsigned long ReadADCChannel0(void);
+static unsigned long ReadADCChannel3(void);
 static void drawDogArt(void);
 
 //*****************************************************************************
@@ -358,11 +358,11 @@ static void pulse_speed(int us_high) {
 //
 //*****************************************************************************
 static void InitializeADC(void) {
-    // Enable ADC channel 0 (PIN_57)
-    MAP_ADCChannelEnable(ADC_BASE, ADC_CH_0);
-    
     // Enable ADC channel 2 (PIN_59)
     MAP_ADCChannelEnable(ADC_BASE, ADC_CH_2);
+    
+    // Enable ADC channel 3 (PIN_60)
+    MAP_ADCChannelEnable(ADC_BASE, ADC_CH_3);
     
     // Configure internal timer for time stamping (optional)
     MAP_ADCTimerConfig(ADC_BASE, 80000);
@@ -370,30 +370,6 @@ static void InitializeADC(void) {
     
     // Enable the ADC module
     MAP_ADCEnable(ADC_BASE);
-}
-
-//*****************************************************************************
-//
-//! Read ADC Channel 0
-//!
-//! \param  None
-//!
-//! \return ADC sample value (12-bit)
-//
-//*****************************************************************************
-static unsigned long ReadADCChannel0(void) {
-    unsigned long ulSample = 0;
-    
-    // Check if data is available in FIFO
-    if(MAP_ADCFIFOLvlGet(ADC_BASE, ADC_CH_0)) {
-        // Read the sample from FIFO
-        ulSample = MAP_ADCFIFORead(ADC_BASE, ADC_CH_0);
-        
-        // Extract the 12-bit ADC sample from bits [13:2]
-        ulSample = (ulSample & 0x3FFC) >> 2;
-    }
-    
-    return ulSample;
 }
 
 //*****************************************************************************
@@ -412,6 +388,30 @@ static unsigned long ReadADCChannel2(void) {
     if(MAP_ADCFIFOLvlGet(ADC_BASE, ADC_CH_2)) {
         // Read the sample from FIFO
         ulSample = MAP_ADCFIFORead(ADC_BASE, ADC_CH_2);
+        
+        // Extract the 12-bit ADC sample from bits [13:2]
+        ulSample = (ulSample & 0x3FFC) >> 2;
+    }
+    
+    return ulSample;
+}
+
+//*****************************************************************************
+//
+//! Read ADC Channel 3
+//!
+//! \param  None
+//!
+//! \return ADC sample value (12-bit)
+//
+//*****************************************************************************
+static unsigned long ReadADCChannel3(void) {
+    unsigned long ulSample = 0;
+    
+    // Check if data is available in FIFO
+    if(MAP_ADCFIFOLvlGet(ADC_BASE, ADC_CH_3)) {
+        // Read the sample from FIFO
+        ulSample = MAP_ADCFIFORead(ADC_BASE, ADC_CH_3);
         
         // Extract the 12-bit ADC sample from bits [13:2]
         ulSample = (ulSample & 0x3FFC) >> 2;
@@ -569,7 +569,12 @@ void main() {
 
     while(1) {
 
-        if(SW3_PRESSED) {
+        // Read ADC Channel 2 and Channel 3 values first
+        unsigned long adcValue2 = ReadADCChannel2();
+        unsigned long adcValue3 = ReadADCChannel3();
+
+        // Execute servo action when ADC Channel 3 goes over 200
+        if(adcValue3 > 200) {
             http_post(lRetVal);
 
             UART_PRINT("trying to draw ");
@@ -590,9 +595,8 @@ void main() {
 
             UART_PRINT("now servo");
 
-
             pulse_speed(1500);
-            delay(100);
+            delay(80);
             pulse_speed(2000);
 
             UART_PRINT("done servo");
@@ -602,14 +606,14 @@ void main() {
             delay(100);
         }
 
-        // Read the bitmask (0x20) from GPIOA0_BASE
-        int raw = GPIOPinRead(GPIOA0_BASE, 0x20);
+        // Read the bitmask (0x1) from GPIOA1_BASE
+        int raw = GPIOPinRead(GPIOA1_BASE, 0x1);
         // Shift down so you get a 0 or 1
-        int value = (raw & 0x20) ? 0 : 1;
+        int value = (raw & 0x1) ? 0 : 1;
 
         // Only report when value switches from 0 to 1
         if (prev_value == 0 && value == 1) {
-            Report("GPIO PA0.3 = %d\r\n", value);
+            Report("top photo = %d\r\n", value);
             fillScreen(BLACK);
 
             const char *msg1 = "Food is Empty";
@@ -626,11 +630,13 @@ void main() {
         // Update previous value for next iteration
         prev_value = value;
 
-        // Read ADC Channel 0 and Channel 2 and print the values
-        unsigned long adcValue0 = ReadADCChannel0();
-        unsigned long adcValue2 = ReadADCChannel2();
-        UART_PRINT("ADC Channel 0 (PIN_57) value: %lu\r\n", adcValue0);
-        UART_PRINT("ADC Channel 2 (PIN_59) value: %lu\r\n", adcValue2);
+        // Only output ADC values if they are greater than 200
+        if(adcValue2 > 200) {
+            UART_PRINT("ADC Channel 2 (PIN_59) value: %lu\r\n", adcValue2);
+        }
+        if(adcValue3 > 200) {
+            UART_PRINT("ADC Channel 3 (PIN_60) value: %lu\r\n", adcValue3);
+        }
 
         // Draw the dog art instead of filling screen with red
         drawDogArt();

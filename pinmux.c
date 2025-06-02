@@ -85,19 +85,19 @@ void PinMuxConfig(void)
     PinTypeADC(PIN_60, PIN_MODE_255);
 
     //
-    // Configure PIN_58 for GPIO Output
+    // Configure PIN_58 for GPIO Output - servo
     //
     PinTypeGPIO(PIN_58, PIN_MODE_0, false);
     GPIODirModeSet(GPIOA0_BASE, 0x8, GPIO_DIR_MODE_OUT);
 
     //
-    // Configure PIN_63 for GPIO Input
+    // Configure PIN_63 for GPIO Input - top photo
     //
     PinTypeGPIO(PIN_63, PIN_MODE_0, false);
     GPIODirModeSet(GPIOA1_BASE, 0x1, GPIO_DIR_MODE_IN);
 
     //
-    // Configure PIN_64 for GPIO Input
+    // Configure PIN_64 for GPIO Input - bottom photo
     //
     PinTypeGPIO(PIN_64, PIN_MODE_0, false);
     GPIODirModeSet(GPIOA1_BASE, 0x2, GPIO_DIR_MODE_IN);
