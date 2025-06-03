@@ -36,7 +36,7 @@
 //
 //*****************************************************************************
 
-// This file was automatically generated on 6/1/2025 at 6:29:32 PM
+// This file was automatically generated on 6/2/2025 at 12:44:08 PM
 // by TI PinMux version 1.15.0+2826
 //
 //*****************************************************************************
@@ -66,13 +66,17 @@ void PinMuxConfig(void)
     // Enable Peripheral Clocks 
     //
     PRCMPeripheralClkEnable(PRCM_ADC, PRCM_RUN_MODE_CLK);
-    PRCMPeripheralClkEnable(PRCM_GPIOA0, PRCM_RUN_MODE_CLK);
     PRCMPeripheralClkEnable(PRCM_GPIOA1, PRCM_RUN_MODE_CLK);
     PRCMPeripheralClkEnable(PRCM_GPIOA2, PRCM_RUN_MODE_CLK);
     PRCMPeripheralClkEnable(PRCM_GPIOA3, PRCM_RUN_MODE_CLK);
     PRCMPeripheralClkEnable(PRCM_I2CA0, PRCM_RUN_MODE_CLK);
     PRCMPeripheralClkEnable(PRCM_GSPI, PRCM_RUN_MODE_CLK);
     PRCMPeripheralClkEnable(PRCM_UARTA0, PRCM_RUN_MODE_CLK);
+
+    //
+    // Configure PIN_58 for ADC0 ADC_CH1
+    //
+    PinTypeADC(PIN_58, PIN_MODE_255);
 
     //
     // Configure PIN_59 for ADC0 ADC_CH2
@@ -85,19 +89,13 @@ void PinMuxConfig(void)
     PinTypeADC(PIN_60, PIN_MODE_255);
 
     //
-    // Configure PIN_58 for GPIO Output - servo
-    //
-    PinTypeGPIO(PIN_58, PIN_MODE_0, false);
-    GPIODirModeSet(GPIOA0_BASE, 0x8, GPIO_DIR_MODE_OUT);
-
-    //
-    // Configure PIN_63 for GPIO Input - top photo
+    // Configure PIN_63 for GPIO Input
     //
     PinTypeGPIO(PIN_63, PIN_MODE_0, false);
     GPIODirModeSet(GPIOA1_BASE, 0x1, GPIO_DIR_MODE_IN);
 
     //
-    // Configure PIN_64 for GPIO Input - bottom photo
+    // Configure PIN_64 for GPIO Input
     //
     PinTypeGPIO(PIN_64, PIN_MODE_0, false);
     GPIODirModeSet(GPIOA1_BASE, 0x2, GPIO_DIR_MODE_IN);
@@ -119,6 +117,12 @@ void PinMuxConfig(void)
     //
     PinTypeGPIO(PIN_15, PIN_MODE_0, false);
     GPIODirModeSet(GPIOA2_BASE, 0x40, GPIO_DIR_MODE_OUT);
+
+    //
+    // Configure PIN_17 for GPIO Output
+    //
+    PinTypeGPIO(PIN_17, PIN_MODE_0, false);
+    GPIODirModeSet(GPIOA3_BASE, 0x1, GPIO_DIR_MODE_OUT);
 
     //
     // Configure PIN_18 for GPIO Output

@@ -58,8 +58,8 @@
 //*****************************************************************************
 
 #include <stdio.h>
-
-
+#include <stdint.h>
+#include <stdbool.h>
 
 // Simplelink includes
 #include "simplelink.h"
@@ -83,6 +83,7 @@
 #include "gpio_if.h"
 #include "common.h"
 #include "uart_if.h"
+#include "i2c_if.h"
 
 #include "Adafruit_GFX.h"
 #include "glcdfont.h"
@@ -95,6 +96,18 @@
 
 // Custom includes
 #include "utils/network_utils.h"
+
+// DS1307 RTC defines
+#define DS1307_I2C_ADDR    0x68  // 7-bit I2C address
+
+// Compile-time default time: Jun 2, 2025, 11:20:10, Monday (2)
+#define INIT_HOUR        11
+#define INIT_MINUTE      20
+#define INIT_SECOND      10
+#define INIT_DAYOFWEEK    2    // 1 = Sunday … 7 = Saturday
+#define INIT_DATE         2
+#define INIT_MONTH        6
+#define INIT_YEAR        25   // DS1307 stores "25" for 2025
 
 
 //  function delays 3*ulCount cycles
@@ -109,11 +122,11 @@ static void delay(unsigned long ulCount){
 
 
 //NEED TO UPDATE THIS FOR IT TO WORK!
-#define DATE                1    /* Current Date */
+#define DATE                2    /* Current Date */
 #define MONTH               6     /* Month 1-12 */
 #define YEAR                2025  /* Current year */
-#define HOUR                17    /* Time - hours */
-#define MINUTE              48    /* Time - minutes */
+#define HOUR                15    /* Time - hours */
+#define MINUTE              26    /* Time - minutes */
 #define SECOND              0     /* Time - seconds */
 
 
@@ -125,7 +138,7 @@ static void delay(unsigned long ulCount){
 #define GOOGLE_DST_PORT       8443
 
 
-#define SERVO_PIN_MASK      0x8   // PA0
+#define SERVO_PIN_MASK      0x1   // PA0
 #define DELAY_COUNTS_PER_US 13
 
 #define SPI_IF_BIT_RATE  1000000
@@ -150,6 +163,9 @@ static void delay(unsigned long ulCount){
                 "}"                                                         \
             "}"                                                             \
         "}\r\n\r\n"
+
+#define RED     0xF800
+#define GREEN   0x07E0
 
 // Dog ASCII art data (128 lines)
 const char* dogArt[128] = {
@@ -308,6 +324,13 @@ static void InitializeADC(void);
 static unsigned long ReadADCChannel2(void);
 static unsigned long ReadADCChannel3(void);
 static void drawDogArt(void);
+static void displayMessage(const char* message);
+static void InitializeI2C(void);
+static unsigned char dec_to_bcd(unsigned char val);
+static unsigned char bcd_to_dec(unsigned char bcd);
+static void DS1307_ReadAllRegs(unsigned char out[7]);
+static void displayDateTimeOnOLED(void);
+static unsigned long ReadADCChannel1(void);
 
 //*****************************************************************************
 //
@@ -342,9 +365,9 @@ static void BoardInit(void) {
 
 
 static void pulse_speed(int us_high) {
-    MAP_GPIOPinWrite(GPIOA0_BASE, SERVO_PIN_MASK, SERVO_PIN_MASK);
+    MAP_GPIOPinWrite(GPIOA3_BASE, SERVO_PIN_MASK, SERVO_PIN_MASK);
     UtilsDelay(DELAY_COUNTS_PER_US * us_high);
-    MAP_GPIOPinWrite(GPIOA0_BASE, SERVO_PIN_MASK, 0);
+    MAP_GPIOPinWrite(GPIOA3_BASE, SERVO_PIN_MASK, 0);
     UtilsDelay(DELAY_COUNTS_PER_US * (20000 - us_high));
 }
 
@@ -358,6 +381,9 @@ static void pulse_speed(int us_high) {
 //
 //*****************************************************************************
 static void InitializeADC(void) {
+    // Enable ADC channel 1 (PIN_58)
+    MAP_ADCChannelEnable(ADC_BASE, ADC_CH_1);
+    
     // Enable ADC channel 2 (PIN_59)
     MAP_ADCChannelEnable(ADC_BASE, ADC_CH_2);
     
@@ -412,6 +438,30 @@ static unsigned long ReadADCChannel3(void) {
     if(MAP_ADCFIFOLvlGet(ADC_BASE, ADC_CH_3)) {
         // Read the sample from FIFO
         ulSample = MAP_ADCFIFORead(ADC_BASE, ADC_CH_3);
+        
+        // Extract the 12-bit ADC sample from bits [13:2]
+        ulSample = (ulSample & 0x3FFC) >> 2;
+    }
+    
+    return ulSample;
+}
+
+//*****************************************************************************
+//
+//! Read ADC Channel 1
+//!
+//! \param  None
+//!
+//! \return ADC sample value (12-bit)
+//
+//*****************************************************************************
+static unsigned long ReadADCChannel1(void) {
+    unsigned long ulSample = 0;
+    
+    // Check if data is available in FIFO
+    if(MAP_ADCFIFOLvlGet(ADC_BASE, ADC_CH_1)) {
+        // Read the sample from FIFO
+        ulSample = MAP_ADCFIFORead(ADC_BASE, ADC_CH_1);
         
         // Extract the 12-bit ADC sample from bits [13:2]
         ulSample = (ulSample & 0x3FFC) >> 2;
@@ -535,6 +585,9 @@ void main() {
 
     // Initialize ADC
     InitializeADC();
+    
+    // Initialize I2C for RTC
+    InitializeI2C();
 
 //    MAP_PRCMPeripheralClkEnable(PRCM_GPIOA0, PRCM_RUN_MODE_CLK);
 
@@ -567,31 +620,57 @@ void main() {
     // Main loop - only execute when SW3 is pressed
     pulse_speed(2000);
 
+    // Track if food is empty
+    int isFoodEmpty = 0;
+    
     while(1) {
-
-        // Read ADC Channel 2 and Channel 3 values first
+        // Read all ADC Channel values
+        unsigned long adcValue1 = ReadADCChannel1();
         unsigned long adcValue2 = ReadADCChannel2();
         unsigned long adcValue3 = ReadADCChannel3();
 
-        // Execute servo action when ADC Channel 3 goes over 200
-        if(adcValue3 > 200) {
+        // Only output ADC values if they are greater than 200
+        UART_PRINT("ADC Values: CH1 (PIN_58): %lu, CH2 (PIN_59): %lu, CH3 (PIN_60): %lu\r\n", 
+                   adcValue1, adcValue2, adcValue3);
+
+        // Calculate water percentage (ADC value is 12-bit, so max is 4095)
+        int waterPercentage = (adcValue2 * 100) / 4095;
+        
+        // Display water percentage in top left
+        char waterStr[10];
+        sprintf(waterStr, "Water: %d%", waterPercentage);
+        unsigned int x;
+        for(x = 0; x < strlen(waterStr); x++) {
+            drawChar(2 + 6*x, 2, waterStr[x], BLUE, BLACK, 1);
+        }
+
+        // Read the bitmask (0x1) from GPIOA1_BASE
+        int raw = GPIOPinRead(GPIOA1_BASE, 0x1);
+        // Shift down so you get a 0 or 1
+        int value = (raw & 0x1) ? 0 : 1;
+
+        // Handle food empty detection
+        if (prev_value == 0 && value == 1) {
+            Report("top photo = %d\r\n", value);
+            isFoodEmpty = 1;
+        } else if (prev_value == 1 && value == 0) {
+            // Food has been refilled
+            isFoodEmpty = 0;
+            // Clear the "Food is Empty" message area
+            fillRect(0, 95, 128, 20, BLACK);  // Clear the message area
+        }
+
+        // Update previous value for next iteration
+        prev_value = value;
+
+        // Execute servo action when ADC Channel 3 goes over 300 AND food is not empty
+        if(adcValue3 > 300 && !isFoodEmpty) {
             http_post(lRetVal);
 
             UART_PRINT("trying to draw ");
 
-            // Initialize the OLED display
-            fillScreen(BLACK);
-
             const char *msg1 = "Dispensing Food";
-            unsigned int m1 = strlen(msg1);
-
-            unsigned int sx1 = (128 - 6*m1) / 2;
-            unsigned int x;
-            for(x = 0; x < m1; x++)
-            {
-                drawChar(sx1 + 6*x, 56, msg1[x], WHITE, BLACK, 1);
-            }
-                        delay(100);
+            displayMessage(msg1);
 
             UART_PRINT("now servo");
 
@@ -600,48 +679,31 @@ void main() {
             pulse_speed(2000);
 
             UART_PRINT("done servo");
-
             
             // Add a small delay to prevent rapid repeated execution
             delay(100);
         }
 
-        // Read the bitmask (0x1) from GPIOA1_BASE
-        int raw = GPIOPinRead(GPIOA1_BASE, 0x1);
-        // Shift down so you get a 0 or 1
-        int value = (raw & 0x1) ? 0 : 1;
-
-        // Only report when value switches from 0 to 1
-        if (prev_value == 0 && value == 1) {
-            Report("top photo = %d\r\n", value);
-            fillScreen(BLACK);
-
-            const char *msg1 = "Food is Empty";
-            unsigned int m1 = strlen(msg1);
-
-            unsigned int sx1 = (128 - 6*m1) / 2;
-            unsigned int x;
-            for(x = 0; x < m1; x++)
-            {
-                drawChar(sx1 + 6*x, 56, msg1[x], WHITE, BLACK, 1);
-            }
-        }
-
-        // Update previous value for next iteration
-        prev_value = value;
-
-        // Only output ADC values if they are greater than 200
-        if(adcValue2 > 200) {
-            UART_PRINT("ADC Channel 2 (PIN_59) value: %lu\r\n", adcValue2);
-        }
-        if(adcValue3 > 200) {
-            UART_PRINT("ADC Channel 3 (PIN_60) value: %lu\r\n", adcValue3);
-        }
-
         // Draw the dog art instead of filling screen with red
         drawDogArt();
-
-        // Small delay to prevent busy waiting
+        
+        // Display "Food is Empty" in red if food is empty
+        if(isFoodEmpty) {
+            const char* emptyMsg = "Food is Empty";
+            unsigned int msgLen = strlen(emptyMsg);
+            unsigned int startX = (128 - 6*msgLen) / 2;
+            
+            // Display the message in red text
+            for(x = 0; x < msgLen; x++) {
+                drawChar(startX + 6*x, 100, emptyMsg[x], RED, BLACK, 1);
+            }
+        }
+        
+        // Update date and time display every second
+        displayDateTimeOnOLED();
+        
+        // Delay for 1 second
+        delay(3);  // delay() function uses a multiplier, so 3 gives roughly 1 second
     }
 
     sl_Stop(SL_STOP_TIMEOUT);
@@ -716,4 +778,133 @@ static int http_post(int iTLSSockID){
     }
 
     return 0;
+}
+
+//*****************************************************************************
+//
+//! Display Message on OLED
+//!
+//! \param message - String message to display
+//!
+//! \return None
+//
+//*****************************************************************************
+static void displayMessage(const char* message) {
+    unsigned int msgLen = strlen(message);
+    unsigned int startX = (128 - 6*msgLen) / 2;
+    unsigned int x;
+    
+    // Display the message in white text
+    for(x = 0; x < msgLen; x++) {
+        drawChar(startX + 6*x, 100, message[x], GREEN, BLACK, 1);
+    }
+    
+    delay(200);
+    
+    // Clear the message by drawing it in black
+    for(x = 0; x < msgLen; x++) {
+        drawChar(startX + 6*x, 100, message[x], BLACK, BLACK, 1);
+    }
+}
+
+//*****************************************************************************
+//
+//! Initialize I2C
+//!
+//! \param  None
+//!
+//! \return None
+//
+//*****************************************************************************
+static void InitializeI2C(void) {
+    MAP_UtilsDelay(10000);  // ~0.4 ms to let the clock "unstick"
+    I2C_IF_Open(I2C_MASTER_MODE_STD);  // 100 kHz master
+}
+
+//*****************************************************************************
+//
+//! Convert a (0..99) decimal to BCD for storing in DS1307 registers
+//!
+//! \param val - decimal value to convert
+//!
+//! \return BCD encoded value
+//
+//*****************************************************************************
+static unsigned char dec_to_bcd(unsigned char val) {
+    return (unsigned char)(((val / 10) << 4) | (val % 10));
+}
+
+//*****************************************************************************
+//
+//! Convert a BCD� encoded byte (00..99) into a decimal integer (0..99)
+//!
+//! \param bcd - BCD encoded value to convert
+//!
+//! \return decimal value
+//
+//*****************************************************************************
+static unsigned char bcd_to_dec(unsigned char bcd) {
+    return (unsigned char)(((bcd >> 4) * 10) + (bcd & 0x0F));
+}
+
+//*****************************************************************************
+//
+//! Read all seven DS1307 registers into out[0..6]
+//!
+//! \param out - array to store the 7 register values
+//!
+//! \return None
+//
+//*****************************************************************************
+static void DS1307_ReadAllRegs(unsigned char out[7]) {
+    unsigned char pointer = 0x00;
+
+    // 1) Write "pointer = 0x00" + STOP
+    I2C_IF_Write(DS1307_I2C_ADDR, &pointer, 1, 1);
+
+    // 2) Read 7 bytes in one burst
+    I2C_IF_Read(DS1307_I2C_ADDR, out, 7);
+}
+
+//*****************************************************************************
+//
+//! Display current date and time on top right of OLED
+//!
+//! \param None
+//!
+//! \return None
+//
+//*****************************************************************************
+static void displayDateTimeOnOLED(void) {
+    unsigned char allregs[7];
+    char dateStr[12];  // "MM/DD/YY"
+    char timeStr[12];  // "HH:MM:SS"
+    
+    // Read DS1307 registers
+    DS1307_ReadAllRegs(allregs);
+    
+    // Convert BCD to decimal for all time/date fields
+    unsigned char rsec  = bcd_to_dec(allregs[0] & 0x7F);
+    unsigned char rmin  = bcd_to_dec(allregs[1] & 0x7F);
+    unsigned char rhr   = bcd_to_dec(allregs[2] & 0x3F);
+    unsigned char rdate = bcd_to_dec(allregs[4] & 0x3F);
+    unsigned char rmon  = bcd_to_dec(allregs[5] & 0x1F);
+    unsigned char ryr   = bcd_to_dec(allregs[6]);
+    
+    // Format date string: MM/DD/YY
+    sprintf(dateStr, "%02u/%02u/%02u", rmon, rdate, ryr);
+    
+    // Format time string: HH:MM:SS
+    sprintf(timeStr, "%02u:%02u:%02u", rhr, rmin, rsec);
+    
+    // Display date on top right (starting at x=72, y=2)
+    int x;
+    for(x = 0; x < 8; x++) {  // 8 characters in "MM/DD/YY"
+        drawChar(72 + 6*x, 2, dateStr[x], WHITE, BLACK, 1);
+    }
+    
+    // Display time right below date (starting at x=72, y=12)
+    for(x = 0; x < 8; x++) {  // 8 characters in "HH:MM:SS"
+        drawChar(72 + 6*x, 12, timeStr[x], WHITE, BLACK, 1);
+    }
 }
