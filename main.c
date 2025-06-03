@@ -109,6 +109,45 @@
 #define INIT_MONTH        6
 #define INIT_YEAR        25   // DS1307 stores "25" for 2025
 
+// Menu defines
+#define MENU_FEEDING_HISTORY 0
+#define MENU_SETTINGS 1
+#define MENU_BACK 2
+#define MENU_ITEMS 3
+
+// Feeding log defines
+#define MAX_FEEDING_RECORDS 10
+
+// Structure to store feeding timestamp
+typedef struct {
+    unsigned char hour;
+    unsigned char minute;
+    unsigned char second;
+    unsigned char date;
+    unsigned char month;
+    unsigned char year;
+    unsigned char valid;  // 1 if record is valid, 0 if empty
+} FeedingRecord;
+
+// Global feeding log array
+static FeedingRecord feedingLog[MAX_FEEDING_RECORDS];
+static int feedingLogIndex = 0;  // Current index for circular buffer
+
+// Settings defines
+#define PORTION_SMALL 0
+#define PORTION_MEDIUM 1
+#define PORTION_LARGE 2
+
+#define SETTINGS_PORTION_SIZE 0
+#define SETTINGS_DAILY_LIMIT 1
+#define SETTINGS_BACK 2
+#define SETTINGS_MENU_ITEMS 3
+
+// Global settings variables
+static int currentPortionSize = PORTION_MEDIUM;  // Default to medium
+static int dailyFeedingLimit = 2;  // Default to 2 times per day
+static int todayFeedingCount = 0;  // Count of feedings today
+static unsigned char lastFeedingDay = 0;  // Track the last day we fed
 
 //  function delays 3*ulCount cycles
 static void delay(unsigned long ulCount){
@@ -196,8 +235,6 @@ const char* dogArt[128] = {
     "",
     "",
     "                                                                                                   ",
-    "                                                                                                                                                                      ",
-    "                                                                                                                                                                      ",
     "                                                                                                                                                                      ",
     "                                                                                                                                                                      ",
     "                                                                                                                                                                      ",
@@ -331,6 +368,15 @@ static unsigned char bcd_to_dec(unsigned char bcd);
 static void DS1307_ReadAllRegs(unsigned char out[7]);
 static void displayDateTimeOnOLED(void);
 static unsigned long ReadADCChannel1(void);
+static void displayMenu(int selectedOption);
+static void recordFeedingTime(void);
+static void displayFeedingHistory(void);
+static void initializeFeedingLog(void);
+static void displaySettingsMenu(int selectedOption);
+static void handleSettingsNavigation(void);
+static void checkDailyFeedingReset(void);
+static int canFeedToday(void);
+static void adjustedPulseSpeed(void);
 
 //*****************************************************************************
 //
@@ -589,6 +635,9 @@ void main() {
     // Initialize I2C for RTC
     InitializeI2C();
 
+    // Initialize feeding log
+    initializeFeedingLog();
+
 //    MAP_PRCMPeripheralClkEnable(PRCM_GPIOA0, PRCM_RUN_MODE_CLK);
 
 
@@ -644,10 +693,81 @@ void main() {
             drawChar(2 + 6*x, 2, waterStr[x], BLUE, BLACK, 1);
         }
 
+
         // Read the bitmask (0x1) from GPIOA1_BASE
         int raw = GPIOPinRead(GPIOA1_BASE, 0x1);
         // Shift down so you get a 0 or 1
         int value = (raw & 0x1) ? 0 : 1;
+
+        // Check if SW3 is pressed to enter menu mode
+        if(SW3_PRESSED) {
+            fillScreen(BLACK);
+
+            
+            // Enter menu mode
+            int currentOption = 0;
+            int menuActive = 1;
+            int prevADCValue = adcValue1;
+            int inSubScreen = 0; // Flag to track if we're in a sub-screen
+            
+            while(menuActive) {
+                // Only display the menu if we're not in a sub-screen
+                if(!inSubScreen) {
+                    displayMenu(currentOption);
+                }
+                
+                // Read ADC for cursor movement
+                adcValue1 = ReadADCChannel1();
+                
+                // Only handle cursor movement if we're not in a sub-screen
+                if(!inSubScreen) {
+                    // Move cursor up if ADC value goes above 3000
+                    if(adcValue1 > 3000 && prevADCValue <= 3000) {
+                        currentOption = (currentOption > 0) ? currentOption - 1 : MENU_ITEMS - 1;
+                    }
+                    // Move cursor down if ADC value goes below 1000
+                    else if(adcValue1 < 1000 && prevADCValue >= 1000) {
+                        currentOption = (currentOption < MENU_ITEMS - 1) ? currentOption + 1 : 0;
+                    }
+                }
+                
+                prevADCValue = adcValue1;
+                
+                // Check for selection (SW3 press)
+                if(SW3_PRESSED) {
+                    fillScreen(BLACK);
+
+                    
+                    if(!inSubScreen) {
+                        // We're in the main menu, handle menu selection
+                        switch(currentOption) {
+                            case MENU_FEEDING_HISTORY:
+                                // Display feeding history
+                                displayFeedingHistory();
+                                inSubScreen = 1; // Enter sub-screen mode
+                                break;
+                                
+                            case MENU_SETTINGS:
+                                // Enter settings submenu
+                                handleSettingsNavigation();
+                                inSubScreen = 1; // Enter sub-screen mode
+                                break;
+                                
+                            case MENU_BACK:
+                                menuActive = 0; // Exit menu mode
+                                fillScreen(BLACK); // Clear screen
+                                break;
+                        }
+                    } else {
+                        // We're in a sub-screen, go back to main menu
+                        inSubScreen = 0;
+                        // Menu will be redrawn on next iteration
+                    }
+                }
+            }
+            
+            continue; // Skip the rest of the main loop iteration after exiting menu
+        }
 
         // Handle food empty detection
         if (prev_value == 0 && value == 1) {
@@ -663,8 +783,8 @@ void main() {
         // Update previous value for next iteration
         prev_value = value;
 
-        // Execute servo action when ADC Channel 3 goes over 300 AND food is not empty
-        if(adcValue3 > 300 && !isFoodEmpty) {
+        // Execute servo action when ADC Channel 3 goes over 300 AND food is not empty AND within daily limit
+        if(adcValue3 > 300 && !isFoodEmpty && canFeedToday()) {
             http_post(lRetVal);
 
             UART_PRINT("trying to draw ");
@@ -674,14 +794,23 @@ void main() {
 
             UART_PRINT("now servo");
 
-            pulse_speed(1500);
-            delay(80);
-            pulse_speed(2000);
+            // Use adjusted pulse speed based on portion size setting
+            adjustedPulseSpeed();
 
             UART_PRINT("done servo");
             
+            // Record the feeding time and increment daily count
+            recordFeedingTime();
+            todayFeedingCount++;
+            
             // Add a small delay to prevent rapid repeated execution
             delay(100);
+        }
+        // If daily limit reached, show message
+        else if(adcValue3 > 300 && !isFoodEmpty && !canFeedToday()) {
+            const char *limitMsg = "Daily Limit Reached";
+            displayMessage(limitMsg);
+            delay(200); // Show message longer
         }
 
         // Draw the dog art instead of filling screen with red
@@ -836,7 +965,7 @@ static unsigned char dec_to_bcd(unsigned char val) {
 
 //*****************************************************************************
 //
-//! Convert a BCD� encoded byte (00..99) into a decimal integer (0..99)
+//! Convert a BCD encoded byte (00..99) into a decimal integer (0..99)
 //!
 //! \param bcd - BCD encoded value to convert
 //!
@@ -907,4 +1036,343 @@ static void displayDateTimeOnOLED(void) {
     for(x = 0; x < 8; x++) {  // 8 characters in "HH:MM:SS"
         drawChar(72 + 6*x, 12, timeStr[x], WHITE, BLACK, 1);
     }
+}
+
+//*****************************************************************************
+//
+//! Display Menu on OLED
+//!
+//! \param selectedOption - Index of the selected menu option
+//!
+//! \return None
+//
+//*****************************************************************************
+static void displayMenu(int selectedOption) {
+    // Clear the screen
+    
+    // Menu title
+    const char* title = "Menu";
+    unsigned int titleLen = strlen(title);
+    unsigned int titleX = (128 - 6*titleLen) / 2;
+    unsigned int x;
+    for(x = 0; x < titleLen; x++) {
+        drawChar(titleX + 6*x, 10, title[x], WHITE, BLACK, 1);
+    }
+    
+    // Menu options
+    const char* options[] = {
+        "Feeding History",
+        "Settings",
+        "Back"
+    };
+    
+    int i;
+    for(i = 0; i < MENU_ITEMS; i++) {
+        unsigned int len = strlen(options[i]);
+        unsigned int startX = (128 - 6*len) / 2;
+        
+        // Draw cursor for selected option
+        if(i == selectedOption) {
+            drawChar(startX - 12, 35 + i*20, '>', WHITE, BLACK, 1);
+        }
+        
+        // Draw option text
+        for(x = 0; x < len; x++) {
+            drawChar(startX + 6*x, 35 + i*20, options[i][x], 
+                    (i == selectedOption) ? GREEN : WHITE, BLACK, 1);
+        }
+    }
+}
+
+//*****************************************************************************
+//
+//! Initialize Feeding Log
+//!
+//! \param None
+//!
+//! \return None
+//
+//*****************************************************************************
+static void initializeFeedingLog(void) {
+    int i;
+    for(i = 0; i < MAX_FEEDING_RECORDS; i++) {
+        feedingLog[i].valid = 0;  // Mark all records as invalid
+    }
+    feedingLogIndex = 0;
+}
+
+//*****************************************************************************
+//
+//! Record Feeding Time
+//!
+//! \param None
+//!
+//! \return None
+//
+//*****************************************************************************
+static void recordFeedingTime(void) {
+    unsigned char allregs[7];
+    
+    // Read current time from DS1307
+    DS1307_ReadAllRegs(allregs);
+    
+    // Convert BCD to decimal and store in feeding log
+    feedingLog[feedingLogIndex].hour = bcd_to_dec(allregs[2] & 0x3F);
+    feedingLog[feedingLogIndex].minute = bcd_to_dec(allregs[1] & 0x7F);
+    feedingLog[feedingLogIndex].second = bcd_to_dec(allregs[0] & 0x7F);
+    feedingLog[feedingLogIndex].date = bcd_to_dec(allregs[4] & 0x3F);
+    feedingLog[feedingLogIndex].month = bcd_to_dec(allregs[5] & 0x1F);
+    feedingLog[feedingLogIndex].year = bcd_to_dec(allregs[6]);
+    feedingLog[feedingLogIndex].valid = 1;  // Mark as valid
+    
+    // Move to next index (circular buffer)
+    feedingLogIndex = (feedingLogIndex + 1) % MAX_FEEDING_RECORDS;
+}
+
+//*****************************************************************************
+//
+//! Display Feeding History
+//!
+//! \param None
+//!
+//! \return None
+//
+//*****************************************************************************
+static void displayFeedingHistory(void) {
+    int i, displayCount = 0;
+    char timeStr[20];
+    unsigned int x;
+    
+    // Clear screen
+    fillScreen(BLACK);
+    
+    // Title
+    const char* title = "Feeding History";
+    unsigned int titleLen = strlen(title);
+    unsigned int titleX = (128 - 6*titleLen) / 2;
+    for(x = 0; x < titleLen; x++) {
+        drawChar(titleX + 6*x, 5, title[x], WHITE, BLACK, 1);
+    }
+    
+    // Find and display valid feeding records (show most recent first)
+    int currentIndex = (feedingLogIndex - 1 + MAX_FEEDING_RECORDS) % MAX_FEEDING_RECORDS;
+    
+    for(i = 0; i < MAX_FEEDING_RECORDS && displayCount < 8; i++) {
+        if(feedingLog[currentIndex].valid) {
+            // Format: MM/DD HH:MM
+            sprintf(timeStr, "%02u/%02u %02u:%02u", 
+                   feedingLog[currentIndex].month,
+                   feedingLog[currentIndex].date,
+                   feedingLog[currentIndex].hour,
+                   feedingLog[currentIndex].minute);
+            
+            // Display the feeding time
+            unsigned int len = strlen(timeStr);
+            unsigned int startX = (128 - 6*len) / 2;
+            for(x = 0; x < len; x++) {
+                drawChar(startX + 6*x, 25 + displayCount*12, timeStr[x], GREEN, BLACK, 1);
+            }
+            displayCount++;
+        }
+        
+        // Move to previous record
+        currentIndex = (currentIndex - 1 + MAX_FEEDING_RECORDS) % MAX_FEEDING_RECORDS;
+    }
+    
+    // If no feeding records, show message
+    if(displayCount == 0) {
+        const char* noRecordsMsg = "No feeding records";
+        unsigned int msgLen = strlen(noRecordsMsg);
+        unsigned int startX = (128 - 6*msgLen) / 2;
+        for(x = 0; x < msgLen; x++) {
+            drawChar(startX + 6*x, 50, noRecordsMsg[x], YELLOW, BLACK, 1);
+        }
+    }
+    
+    // Show instruction to go back
+    const char* backMsg = "Press SW3 to go back";
+    unsigned int msgLen = strlen(backMsg);
+    unsigned int startX = (128 - 6*msgLen) / 2;
+    for(x = 0; x < msgLen; x++) {
+        drawChar(startX + 6*x, 110, backMsg[x], WHITE, BLACK, 1);
+    }
+}
+
+static void displaySettingsMenu(int selectedOption) {
+    // Clear screen
+    fillScreen(BLACK);
+    
+    // Title
+    const char* title = "Settings";
+    unsigned int titleLen = strlen(title);
+    unsigned int titleX = (128 - 6*titleLen) / 2;
+    unsigned int x;
+    for(x = 0; x < titleLen; x++) {
+        drawChar(titleX + 6*x, 5, title[x], WHITE, BLACK, 1);
+    }
+    
+    // Current portion size setting
+    char portionStr[30];
+    const char* portionNames[] = {"Small", "Medium", "Large"};
+    sprintf(portionStr, "Portion: %s", portionNames[currentPortionSize]);
+    unsigned int len = strlen(portionStr);
+    unsigned int startX = (128 - 6*len) / 2;
+    
+    if(selectedOption == SETTINGS_PORTION_SIZE) {
+        drawChar(startX - 12, 30, '>', WHITE, BLACK, 1);
+    }
+    for(x = 0; x < len; x++) {
+        drawChar(startX + 6*x, 30, portionStr[x], 
+                (selectedOption == SETTINGS_PORTION_SIZE) ? GREEN : WHITE, BLACK, 1);
+    }
+    
+    // Daily feeding limit setting
+    char limitStr[30];
+    sprintf(limitStr, "Daily Limit: %d", dailyFeedingLimit);
+    len = strlen(limitStr);
+    startX = (128 - 6*len) / 2;
+    
+    if(selectedOption == SETTINGS_DAILY_LIMIT) {
+        drawChar(startX - 12, 50, '>', WHITE, BLACK, 1);
+    }
+    for(x = 0; x < len; x++) {
+        drawChar(startX + 6*x, 50, limitStr[x], 
+                (selectedOption == SETTINGS_DAILY_LIMIT) ? GREEN : WHITE, BLACK, 1);
+    }
+    
+    // Back option
+    const char* backStr = "Back";
+    len = strlen(backStr);
+    startX = (128 - 6*len) / 2;
+    
+    if(selectedOption == SETTINGS_BACK) {
+        drawChar(startX - 12, 70, '>', WHITE, BLACK, 1);
+    }
+    for(x = 0; x < len; x++) {
+        drawChar(startX + 6*x, 70, backStr[x], 
+                (selectedOption == SETTINGS_BACK) ? GREEN : WHITE, BLACK, 1);
+    }
+    
+    // Show current daily feeding status
+    char statusStr[30];
+    sprintf(statusStr, "Today: %d/%d fed", todayFeedingCount, dailyFeedingLimit);
+    len = strlen(statusStr);
+    startX = (128 - 6*len) / 2;
+    for(x = 0; x < len; x++) {
+        drawChar(startX + 6*x, 90, statusStr[x], YELLOW, BLACK, 1);
+    }
+    
+    // Instructions
+    const char* instrStr = "SW3=Select ADC=Change";
+    len = strlen(instrStr);
+    startX = (128 - 6*len) / 2;
+    for(x = 0; x < len; x++) {
+        drawChar(startX + 6*x, 110, instrStr[x], WHITE, BLACK, 1);
+    }
+}
+
+static void handleSettingsNavigation(void) {
+    int settingsOption = 0;
+    int settingsActive = 1;
+    int prevADCValue = ReadADCChannel1();
+    
+    while(settingsActive) {
+        displaySettingsMenu(settingsOption);
+        
+        // Read ADC for navigation
+        unsigned long adcValue1 = ReadADCChannel1();
+        
+        // Navigate up/down through settings
+        if(adcValue1 > 3000 && prevADCValue <= 3000) {
+            settingsOption = (settingsOption > 0) ? settingsOption - 1 : SETTINGS_MENU_ITEMS - 1;
+        }
+        else if(adcValue1 < 1000 && prevADCValue >= 1000) {
+            settingsOption = (settingsOption < SETTINGS_MENU_ITEMS - 1) ? settingsOption + 1 : 0;
+        }
+        
+        prevADCValue = adcValue1;
+        
+        // Handle selection with SW3
+        if(SW3_PRESSED) {
+            switch(settingsOption) {
+                case SETTINGS_PORTION_SIZE:
+                    // Cycle through portion sizes
+                    currentPortionSize = (currentPortionSize + 1) % 3;
+                    delay(50); // Debounce
+                    break;
+                    
+                case SETTINGS_DAILY_LIMIT:
+                    // Cycle through daily limits (1, 2, 3)
+                    dailyFeedingLimit++;
+                    if(dailyFeedingLimit > 3) {
+                        dailyFeedingLimit = 1;
+                    }
+                    delay(50); // Debounce
+                    break;
+                    
+                case SETTINGS_BACK:
+                    settingsActive = 0; // Exit settings menu
+                    break;
+            }
+        }
+        
+        delay(10); // Small delay to prevent too rapid updates
+    }
+}
+
+static void checkDailyFeedingReset(void) {
+    unsigned char allregs[7];
+    
+    // Read current date from DS1307
+    DS1307_ReadAllRegs(allregs);
+    unsigned char currentDay = bcd_to_dec(allregs[4] & 0x3F);
+    
+    // If the day has changed, reset the feeding count
+    if(currentDay != lastFeedingDay) {
+        todayFeedingCount = 0;
+        lastFeedingDay = currentDay;
+    }
+}
+
+static int canFeedToday(void) {
+    checkDailyFeedingReset();
+    return (todayFeedingCount < dailyFeedingLimit);
+}
+
+static void adjustedPulseSpeed(void) {
+    int pulseDelay;
+    int numPulses;
+    
+    // Set pulse parameters based on portion size
+    switch(currentPortionSize) {
+        case PORTION_SMALL:
+            pulseDelay = 1300;  // Small portion - shorter pulse
+            numPulses = 1;      // Single pulse
+            break;
+        case PORTION_MEDIUM:
+            pulseDelay = 1500;  // Medium portion - medium pulse
+            numPulses = 1;      // Single pulse
+            break;
+        case PORTION_LARGE:
+            pulseDelay = 1700;  // Large portion - longer pulse
+            numPulses = 2;      // Double pulse for more food
+            break;
+        default:
+            pulseDelay = 1500;  // Default to medium
+            numPulses = 1;
+            break;
+    }
+    
+    // Execute the feeding pulses
+    int i;
+    for(i = 0; i < numPulses; i++) {
+        pulse_speed(pulseDelay);
+        if(numPulses > 1) {
+            delay(50);  // Brief pause between pulses for large portions
+        }
+    }
+    
+    // Return to neutral position
+    delay(80);
+    pulse_speed(2000);
 }
