@@ -1,38 +1,37 @@
 //*****************************************************************************
 //
-// Copyright (C) 2014 Texas Instruments Incorporated - http://www.ti.com/ 
-// 
-// 
-//  Redistribution and use in source and binary forms, with or without 
-//  modification, are permitted provided that the following conditions 
+// Copyright (C) 2014 Texas Instruments Incorporated - http://www.ti.com/
+//
+//
+//  Redistribution and use in source and binary forms, with or without
+//  modification, are permitted provided that the following conditions
 //  are met:
 //
-//    Redistributions of source code must retain the above copyright 
+//    Redistributions of source code must retain the above copyright
 //    notice, this list of conditions and the following disclaimer.
 //
 //    Redistributions in binary form must reproduce the above copyright
-//    notice, this list of conditions and the following disclaimer in the 
-//    documentation and/or other materials provided with the   
-//    distribution. 
+//    notice, this list of conditions and the following disclaimer in the
+//    documentation and/or other materials provided with the
+//    distribution.
 //
 //    Neither the name of Texas Instruments Incorporated nor the names of
 //    its contributors may be used to endorse or promote products derived
 //    from this software without specific prior written permission.
 //
-//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 
-//  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT 
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+//  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 //  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-//  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT 
-//  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
-//  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
+//  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+//  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+//  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
 //  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 //  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-//  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT 
-//  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
-//  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
+//  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+//  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+//  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //*****************************************************************************
-
 
 //*****************************************************************************
 //
@@ -49,7 +48,6 @@
 //
 //*****************************************************************************
 
-
 //*****************************************************************************
 //
 //! \addtogroup ssl
@@ -64,7 +62,7 @@
 // Simplelink includes
 #include "simplelink.h"
 
-//Driverlib includes
+// Driverlib includes
 #include "hw_types.h"
 #include "hw_memmap.h"
 
@@ -77,8 +75,7 @@
 #include "uart.h"
 #include "spi.h"
 
-
-//Common interface includes
+// Common interface includes
 #include "pinmux.h"
 #include "gpio_if.h"
 #include "common.h"
@@ -93,21 +90,20 @@
 #include "adc.h"
 #include "hw_adc.h"
 
-
 // Custom includes
 #include "utils/network_utils.h"
 
 // DS1307 RTC defines
-#define DS1307_I2C_ADDR    0x68  // 7-bit I2C address
+#define DS1307_I2C_ADDR 0x68 // 7-bit I2C address
 
 // Compile-time default time: Jun 2, 2025, 11:20:10, Monday (2)
-#define INIT_HOUR        11
-#define INIT_MINUTE      20
-#define INIT_SECOND      10
-#define INIT_DAYOFWEEK    2    // 1 = Sunday … 7 = Saturday
-#define INIT_DATE         2
-#define INIT_MONTH        6
-#define INIT_YEAR        25   // DS1307 stores "25" for 2025
+#define INIT_HOUR 11
+#define INIT_MINUTE 20
+#define INIT_SECOND 10
+#define INIT_DAYOFWEEK 2 // 1 = Sunday … 7 = Saturday
+#define INIT_DATE 2
+#define INIT_MONTH 6
+#define INIT_YEAR 25 // DS1307 stores "25" for 2025
 
 // Menu defines
 #define MENU_FEEDING_HISTORY 0
@@ -119,19 +115,20 @@
 #define MAX_FEEDING_RECORDS 10
 
 // Structure to store feeding timestamp
-typedef struct {
+typedef struct
+{
     unsigned char hour;
     unsigned char minute;
     unsigned char second;
     unsigned char date;
     unsigned char month;
     unsigned char year;
-    unsigned char valid;  // 1 if record is valid, 0 if empty
+    unsigned char valid; // 1 if record is valid, 0 if empty
 } FeedingRecord;
 
 // Global feeding log array
 static FeedingRecord feedingLog[MAX_FEEDING_RECORDS];
-static int feedingLogIndex = 0;  // Current index for circular buffer
+static int feedingLogIndex = 0; // Current index for circular buffer
 
 // Settings defines
 #define PORTION_SMALL 0
@@ -144,70 +141,61 @@ static int feedingLogIndex = 0;  // Current index for circular buffer
 #define SETTINGS_MENU_ITEMS 3
 
 // Global settings variables
-static int currentPortionSize = PORTION_MEDIUM;  // Default to medium
-static int dailyFeedingLimit = 2;  // Default to 2 times per day
-static int todayFeedingCount = 0;  // Count of feedings today
-static unsigned char lastFeedingDay = 0;  // Track the last day we fed
+static int currentPortionSize = PORTION_MEDIUM; // Default to medium
+static int dailyFeedingLimit = 2;               // Default to 2 times per day
+static int todayFeedingCount = 0;               // Count of feedings today
+static unsigned char lastFeedingDay = 0;        // Track the last day we fed
+
+// Water level tracking variables
+static int waterBelowThreshold = 0;  // Flag to track if water has gone below 10%
+static int waterThresholdSent = 0;   // Flag to prevent spam when below threshold
 
 //  function delays 3*ulCount cycles
-static void delay(unsigned long ulCount){
+static void delay(unsigned long ulCount)
+{
     int i;
 
-  do{
-    ulCount--;
-        for (i=0; i< 65535; i++) ;
-    }while(ulCount);
+    do
+    {
+        ulCount--;
+        for (i = 0; i < 65535; i++)
+            ;
+    } while (ulCount);
 }
 
+// NEED TO UPDATE THIS FOR IT TO WORK!
+#define DATE 2    /* Current Date */
+#define MONTH 6   /* Month 1-12 */
+#define YEAR 2025 /* Current year */
+#define HOUR 15   /* Time - hours */
+#define MINUTE 26 /* Time - minutes */
+#define SECOND 0  /* Time - seconds */
 
-//NEED TO UPDATE THIS FOR IT TO WORK!
-#define DATE                2    /* Current Date */
-#define MONTH               6     /* Month 1-12 */
-#define YEAR                2025  /* Current year */
-#define HOUR                15    /* Time - hours */
-#define MINUTE              26    /* Time - minutes */
-#define SECOND              0     /* Time - seconds */
+#define APPLICATION_NAME "SSL"
+#define APPLICATION_VERSION "SQ24"
+#define SERVER_NAME "as38mk89cstxi-ats.iot.us-west-1.amazonaws.com" // CHANGE ME
+#define GOOGLE_DST_PORT 8443
 
-
-
-
-#define APPLICATION_NAME      "SSL"
-#define APPLICATION_VERSION   "SQ24"
-#define SERVER_NAME           "as38mk89cstxi-ats.iot.us-west-1.amazonaws.com" // CHANGE ME
-#define GOOGLE_DST_PORT       8443
-
-
-#define SERVO_PIN_MASK      0x1   // PA0
+#define SERVO_PIN_MASK 0x1 // PA0
 #define DELAY_COUNTS_PER_US 13
 
-#define SPI_IF_BIT_RATE  1000000
-#define TR_BUFF_SIZE     100
+#define SPI_IF_BIT_RATE 1000000
+#define TR_BUFF_SIZE 100
 
-#define SW3_PRESSED          (GPIOPinRead(GPIOA1_BASE, 0x20) == 0x20)
+#define SW3_PRESSED (GPIOPinRead(GPIOA1_BASE, 0x20) == 0x20)
 
-
-#define POSTHEADER "POST /things/Gautham_CC3200_board/shadow HTTP/1.1\r\n"             // CHANGE ME
-#define HOSTHEADER "Host: as38mk89cstxi-ats.iot.us-west-1.amazonaws.com\r\n"  // CHANGE ME
+#define POSTHEADER "POST /things/Gautham_CC3200_board/shadow HTTP/1.1\r\n"   // CHANGE ME
+#define HOSTHEADER "Host: as38mk89cstxi-ats.iot.us-west-1.amazonaws.com\r\n" // CHANGE ME
 #define CHEADER "Connection: Keep-Alive\r\n"
 #define CTHEADER "Content-Type: application/json; charset=utf-8\r\n"
 #define CLHEADER1 "Content-Length: "
 #define CLHEADER2 "\r\n\r\n"
 
-#define DATA1 "{" \
-            "\"state\": {\r\n"                                              \
-                "\"desired\" : {\r\n"                                       \
-                    "\"var\" :\""                                           \
-                        "Dispensing the food"                               \
-                        "\"\r\n"                                            \
-                "}"                                                         \
-            "}"                                                             \
-        "}\r\n\r\n"
-
-#define RED     0xF800
-#define GREEN   0x07E0
+#define RED 0xF800
+#define GREEN 0x07E0
 
 // Dog ASCII art data (128 lines)
-const char* dogArt[128] = {
+const char *dogArt[128] = {
     "                                                                                                                                                                      ",
     "                                                                                                                                                                      ",
     "                                                                                                                                                                      ",
@@ -331,16 +319,14 @@ const char* dogArt[128] = {
     "                                                                                                                                                                      ",
     "                                                                                                                                                                      ",
     "                                                                                                                                                                      ",
-    "                                                                                                                                                                      "
-};
-
+    "                                                                                                                                                                      "};
 
 //*****************************************************************************
 //                 GLOBAL VARIABLES -- Start
 //*****************************************************************************
 
 #if defined(ccs) || defined(gcc)
-extern void (* const g_pfnVectors[])(void);
+extern void (*const g_pfnVectors[])(void);
 #endif
 #if defined(ewarm)
 extern uVectorEntry __vector_table;
@@ -350,18 +336,17 @@ extern uVectorEntry __vector_table;
 //                 GLOBAL VARIABLES -- End: df
 //*****************************************************************************
 
-
 //****************************************************************************
 //                      LOCAL FUNCTION PROTOTYPES
 //****************************************************************************
 static int set_time();
 static void BoardInit(void);
-static int http_post(int);
+static int http_post(int, const char* message);
 static void InitializeADC(void);
 static unsigned long ReadADCChannel2(void);
 static unsigned long ReadADCChannel3(void);
 static void drawDogArt(void);
-static void displayMessage(const char* message);
+static void displayMessage(const char *message);
 static void InitializeI2C(void);
 static unsigned char dec_to_bcd(unsigned char val);
 static unsigned char bcd_to_dec(unsigned char bcd);
@@ -387,12 +372,13 @@ static void adjustedPulseSpeed(void);
 //! \return None
 //
 //*****************************************************************************
-static void BoardInit(void) {
+static void BoardInit(void)
+{
 /* In case of TI-RTOS vector table is initialize by OS itself */
 #ifndef USE_TIRTOS
-  //
-  // Set vector table base
-  //
+    //
+    // Set vector table base
+    //
 #if defined(ccs)
     MAP_IntVTableBaseSet((unsigned long)&g_pfnVectors[0]);
 #endif
@@ -409,8 +395,8 @@ static void BoardInit(void) {
     PRCMCC3200MCUInit();
 }
 
-
-static void pulse_speed(int us_high) {
+static void pulse_speed(int us_high)
+{
     MAP_GPIOPinWrite(GPIOA3_BASE, SERVO_PIN_MASK, SERVO_PIN_MASK);
     UtilsDelay(DELAY_COUNTS_PER_US * us_high);
     MAP_GPIOPinWrite(GPIOA3_BASE, SERVO_PIN_MASK, 0);
@@ -426,20 +412,21 @@ static void pulse_speed(int us_high) {
 //! \return None
 //
 //*****************************************************************************
-static void InitializeADC(void) {
+static void InitializeADC(void)
+{
     // Enable ADC channel 1 (PIN_58)
     MAP_ADCChannelEnable(ADC_BASE, ADC_CH_1);
-    
+
     // Enable ADC channel 2 (PIN_59)
     MAP_ADCChannelEnable(ADC_BASE, ADC_CH_2);
-    
+
     // Enable ADC channel 3 (PIN_60)
     MAP_ADCChannelEnable(ADC_BASE, ADC_CH_3);
-    
+
     // Configure internal timer for time stamping (optional)
     MAP_ADCTimerConfig(ADC_BASE, 80000);
     MAP_ADCTimerEnable(ADC_BASE);
-    
+
     // Enable the ADC module
     MAP_ADCEnable(ADC_BASE);
 }
@@ -453,18 +440,20 @@ static void InitializeADC(void) {
 //! \return ADC sample value (12-bit)
 //
 //*****************************************************************************
-static unsigned long ReadADCChannel2(void) {
+static unsigned long ReadADCChannel2(void)
+{
     unsigned long ulSample = 0;
-    
+
     // Check if data is available in FIFO
-    if(MAP_ADCFIFOLvlGet(ADC_BASE, ADC_CH_2)) {
+    if (MAP_ADCFIFOLvlGet(ADC_BASE, ADC_CH_2))
+    {
         // Read the sample from FIFO
         ulSample = MAP_ADCFIFORead(ADC_BASE, ADC_CH_2);
-        
+
         // Extract the 12-bit ADC sample from bits [13:2]
         ulSample = (ulSample & 0x3FFC) >> 2;
     }
-    
+
     return ulSample;
 }
 
@@ -477,18 +466,20 @@ static unsigned long ReadADCChannel2(void) {
 //! \return ADC sample value (12-bit)
 //
 //*****************************************************************************
-static unsigned long ReadADCChannel3(void) {
+static unsigned long ReadADCChannel3(void)
+{
     unsigned long ulSample = 0;
-    
+
     // Check if data is available in FIFO
-    if(MAP_ADCFIFOLvlGet(ADC_BASE, ADC_CH_3)) {
+    if (MAP_ADCFIFOLvlGet(ADC_BASE, ADC_CH_3))
+    {
         // Read the sample from FIFO
         ulSample = MAP_ADCFIFORead(ADC_BASE, ADC_CH_3);
-        
+
         // Extract the 12-bit ADC sample from bits [13:2]
         ulSample = (ulSample & 0x3FFC) >> 2;
     }
-    
+
     return ulSample;
 }
 
@@ -501,18 +492,20 @@ static unsigned long ReadADCChannel3(void) {
 //! \return ADC sample value (12-bit)
 //
 //*****************************************************************************
-static unsigned long ReadADCChannel1(void) {
+static unsigned long ReadADCChannel1(void)
+{
     unsigned long ulSample = 0;
-    
+
     // Check if data is available in FIFO
-    if(MAP_ADCFIFOLvlGet(ADC_BASE, ADC_CH_1)) {
+    if (MAP_ADCFIFOLvlGet(ADC_BASE, ADC_CH_1))
+    {
         // Read the sample from FIFO
         ulSample = MAP_ADCFIFORead(ADC_BASE, ADC_CH_1);
-        
+
         // Extract the 12-bit ADC sample from bits [13:2]
         ulSample = (ulSample & 0x3FFC) >> 2;
     }
-    
+
     return ulSample;
 }
 
@@ -525,22 +518,26 @@ static unsigned long ReadADCChannel1(void) {
 //! \return None
 //
 //*****************************************************************************
-static void drawDogArt(void) {
+static void drawDogArt(void)
+{
     int y, x;
-    
+
     // Clear the screen first
-    
+
     // Go through each line of the dog art
-    for(y = 0; y < 128; y++) {
-        const char* line = dogArt[y];
+    for (y = 0; y < 128; y++)
+    {
+        const char *line = dogArt[y];
         int lineLength = strlen(line);
-        
+
         // Go through each character in the line (left to right)
-        for(x = 0; x < lineLength && x < 128; x++) {
+        for (x = 0; x < lineLength && x < 128; x++)
+        {
             char ch = line[x];
-            
+
             // If character is not a space, draw a white pixel
-            if(ch != ' ' && ch != '\0') {
+            if (ch != ' ' && ch != '\0')
+            {
                 drawPixel(x, y, WHITE);
             }
         }
@@ -557,13 +554,13 @@ void MasterMain()
     //
     // Configure SPI interface
     //
-    MAP_SPIConfigSetExpClk(GSPI_BASE,MAP_PRCMPeripheralClockGet(PRCM_GSPI),
-                     SPI_IF_BIT_RATE,SPI_MODE_MASTER,SPI_SUB_MODE_0,
-                     (SPI_SW_CTRL_CS |
-                     SPI_4PIN_MODE |
-                     SPI_TURBO_OFF |
-                     SPI_CS_ACTIVEHIGH |
-                     SPI_WL_8));
+    MAP_SPIConfigSetExpClk(GSPI_BASE, MAP_PRCMPeripheralClockGet(PRCM_GSPI),
+                           SPI_IF_BIT_RATE, SPI_MODE_MASTER, SPI_SUB_MODE_0,
+                           (SPI_SW_CTRL_CS |
+                            SPI_4PIN_MODE |
+                            SPI_TURBO_OFF |
+                            SPI_CS_ACTIVEHIGH |
+                            SPI_WL_8));
 
     //
     // Enable SPI for communication
@@ -579,7 +576,6 @@ void MasterMain()
     delay(100);
 }
 
-
 //*****************************************************************************
 //
 //! This function updates the date and time of CC3200.
@@ -591,7 +587,8 @@ void MasterMain()
 //!
 //*****************************************************************************
 
-static int set_time() {
+static int set_time()
+{
     long retVal;
 
     g_time.tm_day = DATE;
@@ -602,8 +599,8 @@ static int set_time() {
     g_time.tm_min = SECOND;
 
     retVal = sl_DevSet(SL_DEVICE_GENERAL_CONFIGURATION,
-                          SL_DEVICE_GENERAL_CONFIGURATION_DATE_TIME,
-                          sizeof(SlDateTime),(unsigned char *)(&g_time));
+                       SL_DEVICE_GENERAL_CONFIGURATION_DATE_TIME,
+                       sizeof(SlDateTime), (unsigned char *)(&g_time));
 
     ASSERT_ON_ERROR(retVal);
     return SUCCESS;
@@ -618,7 +615,8 @@ static int set_time() {
 //! \return None
 //!
 //*****************************************************************************
-void main() {
+void main()
+{
     long lRetVal = -1;
     //
     // Initialize board configuration
@@ -631,15 +629,17 @@ void main() {
 
     // Initialize ADC
     InitializeADC();
-    
+
     // Initialize I2C for RTC
     InitializeI2C();
 
     // Initialize feeding log
     initializeFeedingLog();
 
-//    MAP_PRCMPeripheralClkEnable(PRCM_GPIOA0, PRCM_RUN_MODE_CLK);
+    // Initialize daily feeding tracking
+    checkDailyFeedingReset();
 
+    //    MAP_PRCMPeripheralClkEnable(PRCM_GPIOA0, PRCM_RUN_MODE_CLK);
 
     InitTerm();
     ClearTerm();
@@ -649,17 +649,19 @@ void main() {
     g_app_config.host = SERVER_NAME;
     g_app_config.port = GOOGLE_DST_PORT;
 
-    //Connect the CC3200 to the local access point
+    // Connect the CC3200 to the local access point
     lRetVal = connectToAccessPoint();
-    //Set time so that encryption can be used
+    // Set time so that encryption can be used
     lRetVal = set_time();
-    if(lRetVal < 0) {
+    if (lRetVal < 0)
+    {
         UART_PRINT("Unable to set time in the device");
         LOOP_FOREVER();
     }
-    //Connect to the website with TLS encryption
+    // Connect to the website with TLS encryption
     lRetVal = tls_connect();
-    if(lRetVal < 0) {
+    if (lRetVal < 0)
+    {
         ERR_PRINT(lRetVal);
     }
 
@@ -667,32 +669,51 @@ void main() {
     int prev_value = 0;
 
     // Main loop - only execute when SW3 is pressed
-    pulse_speed(2000);
+    pulse_speed(2100);
 
     // Track if food is empty
     int isFoodEmpty = 0;
-    
-    while(1) {
+
+    while (1)
+    {
         // Read all ADC Channel values
         unsigned long adcValue1 = ReadADCChannel1();
         unsigned long adcValue2 = ReadADCChannel2();
         unsigned long adcValue3 = ReadADCChannel3();
 
         // Only output ADC values if they are greater than 200
-        UART_PRINT("ADC Values: CH1 (PIN_58): %lu, CH2 (PIN_59): %lu, CH3 (PIN_60): %lu\r\n", 
+        UART_PRINT("ADC Values: CH1 (PIN_58): %lu, CH2 (PIN_59): %lu, CH3 (PIN_60): %lu\r\n",
                    adcValue1, adcValue2, adcValue3);
 
         // Calculate water percentage (ADC value is 12-bit, so max is 4095)
         int waterPercentage = (adcValue2 * 100) / 4095;
         
-        // Display water percentage in top left
-        char waterStr[10];
-        sprintf(waterStr, "Water: %d%", waterPercentage);
-        unsigned int x;
-        for(x = 0; x < strlen(waterStr); x++) {
-            drawChar(2 + 6*x, 2, waterStr[x], BLUE, BLACK, 1);
+        // Check water level threshold (10%)
+        if (waterPercentage < 10 && !waterBelowThreshold) {
+            // Water just went below 10%
+            waterBelowThreshold = 1;
+            if (!waterThresholdSent) {
+                http_post(lRetVal, "Water level below 10%");
+                waterThresholdSent = 1;
+            }
+        } else if (waterPercentage >= 10 && waterBelowThreshold) {
+            // Water has been refilled above 10%
+            waterBelowThreshold = 0;
+            waterThresholdSent = 0;  // Reset flag so we can send message again if it goes below
         }
+        
+        // Display water percentage in top left
+        char waterStr[12]; // Make sure buffer is large enough
+        sprintf(waterStr, "Water: %d%%", waterPercentage);
 
+        // Clear the previous text area (adjust width if your font is different)
+        fillRect(2, 2, 70, 8, BLACK); // (x, y, width, height, color)
+
+        unsigned int x;
+        for (x = 0; x < strlen(waterStr); x++)
+        {
+            drawChar(2 + 6 * x, 2, waterStr[x], BLUE, BLACK, 1); // x, y, char, color, bg, size
+        }
 
         // Read the bitmask (0x1) from GPIOA1_BASE
         int raw = GPIOPinRead(GPIOA1_BASE, 0x1);
@@ -700,92 +721,112 @@ void main() {
         int value = (raw & 0x1) ? 0 : 1;
 
         // Check if SW3 is pressed to enter menu mode
-        if(SW3_PRESSED) {
+        if (SW3_PRESSED)
+        {
             fillScreen(BLACK);
 
-            
             // Enter menu mode
             int currentOption = 0;
             int menuActive = 1;
             int prevADCValue = adcValue1;
             int inSubScreen = 0; // Flag to track if we're in a sub-screen
-            
-            while(menuActive) {
+
+            while (menuActive)
+            {
                 // Only display the menu if we're not in a sub-screen
-                if(!inSubScreen) {
+                if (!inSubScreen)
+                {
                     displayMenu(currentOption);
                 }
-                
+
                 // Read ADC for cursor movement
                 adcValue1 = ReadADCChannel1();
-                
+
                 // Only handle cursor movement if we're not in a sub-screen
-                if(!inSubScreen) {
+                if (!inSubScreen)
+                {
                     // Move cursor up if ADC value goes above 3000
-                    if(adcValue1 > 3000 && prevADCValue <= 3000) {
+                    if (adcValue1 > 3000 && prevADCValue <= 3000)
+                    {
                         currentOption = (currentOption > 0) ? currentOption - 1 : MENU_ITEMS - 1;
                     }
                     // Move cursor down if ADC value goes below 1000
-                    else if(adcValue1 < 1000 && prevADCValue >= 1000) {
+                    else if (adcValue1 < 1000 && prevADCValue >= 1000)
+                    {
                         currentOption = (currentOption < MENU_ITEMS - 1) ? currentOption + 1 : 0;
                     }
                 }
-                
+
                 prevADCValue = adcValue1;
-                
+
                 // Check for selection (SW3 press)
-                if(SW3_PRESSED) {
+                if (SW3_PRESSED)
+                {
                     fillScreen(BLACK);
 
-                    
-                    if(!inSubScreen) {
+                    if (!inSubScreen)
+                    {
                         // We're in the main menu, handle menu selection
-                        switch(currentOption) {
-                            case MENU_FEEDING_HISTORY:
-                                // Display feeding history
-                                displayFeedingHistory();
-                                inSubScreen = 1; // Enter sub-screen mode
-                                break;
-                                
-                            case MENU_SETTINGS:
-                                // Enter settings submenu
-                                handleSettingsNavigation();
-                                inSubScreen = 1; // Enter sub-screen mode
-                                break;
-                                
-                            case MENU_BACK:
-                                menuActive = 0; // Exit menu mode
-                                fillScreen(BLACK); // Clear screen
-                                break;
+                        switch (currentOption)
+                        {
+                        case MENU_FEEDING_HISTORY:
+                            // Display feeding history
+                            displayFeedingHistory();
+                            inSubScreen = 1; // Enter sub-screen mode
+                            break;
+
+                        case MENU_SETTINGS:
+                            // Enter settings submenu
+                            handleSettingsNavigation();
+                            inSubScreen = 1; // Enter sub-screen mode
+                            break;
+
+                        case MENU_BACK:
+                            menuActive = 0;    // Exit menu mode
+                            fillScreen(BLACK); // Clear screen
+                            break;
                         }
-                    } else {
+                    }
+                    else
+                    {
                         // We're in a sub-screen, go back to main menu
                         inSubScreen = 0;
                         // Menu will be redrawn on next iteration
                     }
                 }
             }
-            
+
             continue; // Skip the rest of the main loop iteration after exiting menu
         }
 
         // Handle food empty detection
-        if (prev_value == 0 && value == 1) {
+        if (prev_value == 0 && value == 1)
+        {
             Report("top photo = %d\r\n", value);
             isFoodEmpty = 1;
-        } else if (prev_value == 1 && value == 0) {
+            // Send message when food becomes empty
+            http_post(lRetVal, "Food container is empty");
+        }
+        else if (prev_value == 1 && value == 0)
+        {
             // Food has been refilled
             isFoodEmpty = 0;
             // Clear the "Food is Empty" message area
-            fillRect(0, 95, 128, 20, BLACK);  // Clear the message area
+            fillRect(0, 95, 128, 20, BLACK); // Clear the message area
         }
 
         // Update previous value for next iteration
         prev_value = value;
 
         // Execute servo action when ADC Channel 3 goes over 300 AND food is not empty AND within daily limit
-        if(adcValue3 > 300 && !isFoodEmpty && canFeedToday()) {
-            http_post(lRetVal);
+        if (adcValue3 > 300 && !isFoodEmpty && canFeedToday())
+        {
+            // Create descriptive message with portion size
+            char feedingMsg[50];
+            const char *portionNames[] = {"Small", "Medium", "Large"};
+            sprintf(feedingMsg, "Dispensing %s portion of food", portionNames[currentPortionSize]);
+            
+            http_post(lRetVal, feedingMsg);
 
             UART_PRINT("trying to draw ");
 
@@ -798,16 +839,17 @@ void main() {
             adjustedPulseSpeed();
 
             UART_PRINT("done servo");
-            
+
             // Record the feeding time and increment daily count
             recordFeedingTime();
             todayFeedingCount++;
-            
+
             // Add a small delay to prevent rapid repeated execution
             delay(100);
         }
         // If daily limit reached, show message
-        else if(adcValue3 > 300 && !isFoodEmpty && !canFeedToday()) {
+        else if (adcValue3 > 300 && !isFoodEmpty && !canFeedToday())
+        {
             const char *limitMsg = "Daily Limit Reached";
             displayMessage(limitMsg);
             delay(200); // Show message longer
@@ -815,24 +857,26 @@ void main() {
 
         // Draw the dog art instead of filling screen with red
         drawDogArt();
-        
+
         // Display "Food is Empty" in red if food is empty
-        if(isFoodEmpty) {
-            const char* emptyMsg = "Food is Empty";
+        if (isFoodEmpty)
+        {
+            const char *emptyMsg = "Food is Empty";
             unsigned int msgLen = strlen(emptyMsg);
-            unsigned int startX = (128 - 6*msgLen) / 2;
-            
+            unsigned int startX = (128 - 6 * msgLen) / 2;
+
             // Display the message in red text
-            for(x = 0; x < msgLen; x++) {
-                drawChar(startX + 6*x, 100, emptyMsg[x], RED, BLACK, 1);
+            for (x = 0; x < msgLen; x++)
+            {
+                drawChar(startX + 6 * x, 100, emptyMsg[x], RED, BLACK, 1);
             }
         }
-        
+
         // Update date and time display every second
         displayDateTimeOnOLED();
-        
+
         // Delay for 1 second
-        delay(3);  // delay() function uses a multiplier, so 3 gives roughly 1 second
+        delay(3); // delay() function uses a multiplier, so 3 gives roughly 1 second
     }
 
     sl_Stop(SL_STOP_TIMEOUT);
@@ -845,12 +889,25 @@ void main() {
 //
 //*****************************************************************************
 
-static int http_post(int iTLSSockID){
+static int http_post(int iTLSSockID, const char* message)
+{
     char acSendBuff[512];
     char acRecvbuff[1460];
     char cCLLength[200];
-    char* pcBufHeaders;
+    char jsonData[256];
+    char *pcBufHeaders;
     int lRetVal = 0;
+
+    // Create JSON data with the provided message
+    sprintf(jsonData, "{"
+                      "\"state\": {\r\n"
+                      "\"desired\" : {\r\n"
+                      "\"var\" :\""
+                      "%s"
+                      "\"\r\n"
+                      "}"
+                      "}"
+                      "}\r\n\r\n", message);
 
     pcBufHeaders = acSendBuff;
     strcpy(pcBufHeaders, POSTHEADER);
@@ -861,7 +918,7 @@ static int http_post(int iTLSSockID){
     pcBufHeaders += strlen(CHEADER);
     strcpy(pcBufHeaders, "\r\n\r\n");
 
-    int dataLength = strlen(DATA1);
+    int dataLength = strlen(jsonData);
 
     strcpy(pcBufHeaders, CTHEADER);
     pcBufHeaders += strlen(CTHEADER);
@@ -875,33 +932,35 @@ static int http_post(int iTLSSockID){
     strcpy(pcBufHeaders, CLHEADER2);
     pcBufHeaders += strlen(CLHEADER2);
 
-    strcpy(pcBufHeaders, DATA1);
-    pcBufHeaders += strlen(DATA1);
+    strcpy(pcBufHeaders, jsonData);
+    pcBufHeaders += strlen(jsonData);
 
     int testDataLength = strlen(pcBufHeaders);
 
     UART_PRINT(acSendBuff);
 
-
     //
     // Send the packet to the server */
     //
     lRetVal = sl_Send(iTLSSockID, acSendBuff, strlen(acSendBuff), 0);
-    if(lRetVal < 0) {
-        UART_PRINT("POST failed. Error Number: %i\n\r",lRetVal);
+    if (lRetVal < 0)
+    {
+        UART_PRINT("POST failed. Error Number: %i\n\r", lRetVal);
         sl_Close(iTLSSockID);
         GPIO_IF_LedOn(MCU_RED_LED_GPIO);
         return lRetVal;
     }
     lRetVal = sl_Recv(iTLSSockID, &acRecvbuff[0], sizeof(acRecvbuff), 0);
-    if(lRetVal < 0) {
-        UART_PRINT("Received failed. Error Number: %i\n\r",lRetVal);
-        //sl_Close(iSSLSockID);
+    if (lRetVal < 0)
+    {
+        UART_PRINT("Received failed. Error Number: %i\n\r", lRetVal);
+        // sl_Close(iSSLSockID);
         GPIO_IF_LedOn(MCU_RED_LED_GPIO);
-           return lRetVal;
+        return lRetVal;
     }
-    else {
-        acRecvbuff[lRetVal+1] = '\0';
+    else
+    {
+        acRecvbuff[lRetVal + 1] = '\0';
         UART_PRINT(acRecvbuff);
         UART_PRINT("\n\r\n\r");
     }
@@ -918,21 +977,24 @@ static int http_post(int iTLSSockID){
 //! \return None
 //
 //*****************************************************************************
-static void displayMessage(const char* message) {
+static void displayMessage(const char *message)
+{
     unsigned int msgLen = strlen(message);
-    unsigned int startX = (128 - 6*msgLen) / 2;
+    unsigned int startX = (128 - 6 * msgLen) / 2;
     unsigned int x;
-    
+
     // Display the message in white text
-    for(x = 0; x < msgLen; x++) {
-        drawChar(startX + 6*x, 100, message[x], GREEN, BLACK, 1);
+    for (x = 0; x < msgLen; x++)
+    {
+        drawChar(startX + 6 * x, 100, message[x], GREEN, BLACK, 1);
     }
-    
+
     delay(200);
-    
+
     // Clear the message by drawing it in black
-    for(x = 0; x < msgLen; x++) {
-        drawChar(startX + 6*x, 100, message[x], BLACK, BLACK, 1);
+    for (x = 0; x < msgLen; x++)
+    {
+        drawChar(startX + 6 * x, 100, message[x], BLACK, BLACK, 1);
     }
 }
 
@@ -945,9 +1007,10 @@ static void displayMessage(const char* message) {
 //! \return None
 //
 //*****************************************************************************
-static void InitializeI2C(void) {
-    MAP_UtilsDelay(10000);  // ~0.4 ms to let the clock "unstick"
-    I2C_IF_Open(I2C_MASTER_MODE_STD);  // 100 kHz master
+static void InitializeI2C(void)
+{
+    MAP_UtilsDelay(10000);            // ~0.4 ms to let the clock "unstick"
+    I2C_IF_Open(I2C_MASTER_MODE_STD); // 100 kHz master
 }
 
 //*****************************************************************************
@@ -959,7 +1022,8 @@ static void InitializeI2C(void) {
 //! \return BCD encoded value
 //
 //*****************************************************************************
-static unsigned char dec_to_bcd(unsigned char val) {
+static unsigned char dec_to_bcd(unsigned char val)
+{
     return (unsigned char)(((val / 10) << 4) | (val % 10));
 }
 
@@ -972,7 +1036,8 @@ static unsigned char dec_to_bcd(unsigned char val) {
 //! \return decimal value
 //
 //*****************************************************************************
-static unsigned char bcd_to_dec(unsigned char bcd) {
+static unsigned char bcd_to_dec(unsigned char bcd)
+{
     return (unsigned char)(((bcd >> 4) * 10) + (bcd & 0x0F));
 }
 
@@ -985,7 +1050,8 @@ static unsigned char bcd_to_dec(unsigned char bcd) {
 //! \return None
 //
 //*****************************************************************************
-static void DS1307_ReadAllRegs(unsigned char out[7]) {
+static void DS1307_ReadAllRegs(unsigned char out[7])
+{
     unsigned char pointer = 0x00;
 
     // 1) Write "pointer = 0x00" + STOP
@@ -1004,37 +1070,40 @@ static void DS1307_ReadAllRegs(unsigned char out[7]) {
 //! \return None
 //
 //*****************************************************************************
-static void displayDateTimeOnOLED(void) {
+static void displayDateTimeOnOLED(void)
+{
     unsigned char allregs[7];
-    char dateStr[12];  // "MM/DD/YY"
-    char timeStr[12];  // "HH:MM:SS"
-    
+    char dateStr[12]; // "MM/DD/YY"
+    char timeStr[12]; // "HH:MM:SS"
+
     // Read DS1307 registers
     DS1307_ReadAllRegs(allregs);
-    
+
     // Convert BCD to decimal for all time/date fields
-    unsigned char rsec  = bcd_to_dec(allregs[0] & 0x7F);
-    unsigned char rmin  = bcd_to_dec(allregs[1] & 0x7F);
-    unsigned char rhr   = bcd_to_dec(allregs[2] & 0x3F);
+    unsigned char rsec = bcd_to_dec(allregs[0] & 0x7F);
+    unsigned char rmin = bcd_to_dec(allregs[1] & 0x7F);
+    unsigned char rhr = bcd_to_dec(allregs[2] & 0x3F);
     unsigned char rdate = bcd_to_dec(allregs[4] & 0x3F);
-    unsigned char rmon  = bcd_to_dec(allregs[5] & 0x1F);
-    unsigned char ryr   = bcd_to_dec(allregs[6]);
-    
+    unsigned char rmon = bcd_to_dec(allregs[5] & 0x1F);
+    unsigned char ryr = bcd_to_dec(allregs[6]);
+
     // Format date string: MM/DD/YY
     sprintf(dateStr, "%02u/%02u/%02u", rmon, rdate, ryr);
-    
+
     // Format time string: HH:MM:SS
     sprintf(timeStr, "%02u:%02u:%02u", rhr, rmin, rsec);
-    
+
     // Display date on top right (starting at x=72, y=2)
     int x;
-    for(x = 0; x < 8; x++) {  // 8 characters in "MM/DD/YY"
-        drawChar(72 + 6*x, 2, dateStr[x], WHITE, BLACK, 1);
+    for (x = 0; x < 8; x++)
+    { // 8 characters in "MM/DD/YY"
+        drawChar(72 + 6 * x, 2, dateStr[x], WHITE, BLACK, 1);
     }
-    
+
     // Display time right below date (starting at x=72, y=12)
-    for(x = 0; x < 8; x++) {  // 8 characters in "HH:MM:SS"
-        drawChar(72 + 6*x, 12, timeStr[x], WHITE, BLACK, 1);
+    for (x = 0; x < 8; x++)
+    { // 8 characters in "HH:MM:SS"
+        drawChar(72 + 6 * x, 12, timeStr[x], WHITE, BLACK, 1);
     }
 }
 
@@ -1047,39 +1116,43 @@ static void displayDateTimeOnOLED(void) {
 //! \return None
 //
 //*****************************************************************************
-static void displayMenu(int selectedOption) {
+static void displayMenu(int selectedOption)
+{
     // Clear the screen
-    
+
     // Menu title
-    const char* title = "Menu";
+    const char *title = "Menu";
     unsigned int titleLen = strlen(title);
-    unsigned int titleX = (128 - 6*titleLen) / 2;
+    unsigned int titleX = (128 - 6 * titleLen) / 2;
     unsigned int x;
-    for(x = 0; x < titleLen; x++) {
-        drawChar(titleX + 6*x, 10, title[x], WHITE, BLACK, 1);
+    for (x = 0; x < titleLen; x++)
+    {
+        drawChar(titleX + 6 * x, 10, title[x], WHITE, BLACK, 1);
     }
-    
+
     // Menu options
-    const char* options[] = {
+    const char *options[] = {
         "Feeding History",
         "Settings",
-        "Back"
-    };
-    
+        "Back"};
+
     int i;
-    for(i = 0; i < MENU_ITEMS; i++) {
+    for (i = 0; i < MENU_ITEMS; i++)
+    {
         unsigned int len = strlen(options[i]);
-        unsigned int startX = (128 - 6*len) / 2;
-        
+        unsigned int startX = (128 - 6 * len) / 2;
+
         // Draw cursor for selected option
-        if(i == selectedOption) {
-            drawChar(startX - 12, 35 + i*20, '>', WHITE, BLACK, 1);
+        if (i == selectedOption)
+        {
+            drawChar(startX - 12, 35 + i * 20, '>', WHITE, BLACK, 1);
         }
-        
+
         // Draw option text
-        for(x = 0; x < len; x++) {
-            drawChar(startX + 6*x, 35 + i*20, options[i][x], 
-                    (i == selectedOption) ? GREEN : WHITE, BLACK, 1);
+        for (x = 0; x < len; x++)
+        {
+            drawChar(startX + 6 * x, 35 + i * 20, options[i][x],
+                     (i == selectedOption) ? GREEN : WHITE, BLACK, 1);
         }
     }
 }
@@ -1093,10 +1166,12 @@ static void displayMenu(int selectedOption) {
 //! \return None
 //
 //*****************************************************************************
-static void initializeFeedingLog(void) {
+static void initializeFeedingLog(void)
+{
     int i;
-    for(i = 0; i < MAX_FEEDING_RECORDS; i++) {
-        feedingLog[i].valid = 0;  // Mark all records as invalid
+    for (i = 0; i < MAX_FEEDING_RECORDS; i++)
+    {
+        feedingLog[i].valid = 0; // Mark all records as invalid
     }
     feedingLogIndex = 0;
 }
@@ -1110,12 +1185,13 @@ static void initializeFeedingLog(void) {
 //! \return None
 //
 //*****************************************************************************
-static void recordFeedingTime(void) {
+static void recordFeedingTime(void)
+{
     unsigned char allregs[7];
-    
+
     // Read current time from DS1307
     DS1307_ReadAllRegs(allregs);
-    
+
     // Convert BCD to decimal and store in feeding log
     feedingLog[feedingLogIndex].hour = bcd_to_dec(allregs[2] & 0x3F);
     feedingLog[feedingLogIndex].minute = bcd_to_dec(allregs[1] & 0x7F);
@@ -1123,8 +1199,8 @@ static void recordFeedingTime(void) {
     feedingLog[feedingLogIndex].date = bcd_to_dec(allregs[4] & 0x3F);
     feedingLog[feedingLogIndex].month = bcd_to_dec(allregs[5] & 0x1F);
     feedingLog[feedingLogIndex].year = bcd_to_dec(allregs[6]);
-    feedingLog[feedingLogIndex].valid = 1;  // Mark as valid
-    
+    feedingLog[feedingLogIndex].valid = 1; // Mark as valid
+
     // Move to next index (circular buffer)
     feedingLogIndex = (feedingLogIndex + 1) % MAX_FEEDING_RECORDS;
 }
@@ -1138,241 +1214,249 @@ static void recordFeedingTime(void) {
 //! \return None
 //
 //*****************************************************************************
-static void displayFeedingHistory(void) {
+static void displayFeedingHistory(void)
+{
     int i, displayCount = 0;
     char timeStr[20];
     unsigned int x;
-    
+
     // Clear screen
     fillScreen(BLACK);
-    
+
     // Title
-    const char* title = "Feeding History";
+    const char *title = "Feeding History";
     unsigned int titleLen = strlen(title);
-    unsigned int titleX = (128 - 6*titleLen) / 2;
-    for(x = 0; x < titleLen; x++) {
-        drawChar(titleX + 6*x, 5, title[x], WHITE, BLACK, 1);
+    unsigned int titleX = (128 - 6 * titleLen) / 2;
+    for (x = 0; x < titleLen; x++)
+    {
+        drawChar(titleX + 6 * x, 5, title[x], WHITE, BLACK, 1);
     }
-    
+
     // Find and display valid feeding records (show most recent first)
     int currentIndex = (feedingLogIndex - 1 + MAX_FEEDING_RECORDS) % MAX_FEEDING_RECORDS;
-    
-    for(i = 0; i < MAX_FEEDING_RECORDS && displayCount < 8; i++) {
-        if(feedingLog[currentIndex].valid) {
+
+    for (i = 0; i < MAX_FEEDING_RECORDS && displayCount < 8; i++)
+    {
+        if (feedingLog[currentIndex].valid)
+        {
             // Format: MM/DD HH:MM
-            sprintf(timeStr, "%02u/%02u %02u:%02u", 
-                   feedingLog[currentIndex].month,
-                   feedingLog[currentIndex].date,
-                   feedingLog[currentIndex].hour,
-                   feedingLog[currentIndex].minute);
-            
+            sprintf(timeStr, "%02u/%02u %02u:%02u",
+                    feedingLog[currentIndex].month,
+                    feedingLog[currentIndex].date,
+                    feedingLog[currentIndex].hour,
+                    feedingLog[currentIndex].minute);
+
             // Display the feeding time
             unsigned int len = strlen(timeStr);
-            unsigned int startX = (128 - 6*len) / 2;
-            for(x = 0; x < len; x++) {
-                drawChar(startX + 6*x, 25 + displayCount*12, timeStr[x], GREEN, BLACK, 1);
+            unsigned int startX = (128 - 6 * len) / 2;
+            for (x = 0; x < len; x++)
+            {
+                drawChar(startX + 6 * x, 25 + displayCount * 12, timeStr[x], GREEN, BLACK, 1);
             }
             displayCount++;
         }
-        
+
         // Move to previous record
         currentIndex = (currentIndex - 1 + MAX_FEEDING_RECORDS) % MAX_FEEDING_RECORDS;
     }
-    
+
     // If no feeding records, show message
-    if(displayCount == 0) {
-        const char* noRecordsMsg = "No feeding records";
+    if (displayCount == 0)
+    {
+        const char *noRecordsMsg = "No feeding records";
         unsigned int msgLen = strlen(noRecordsMsg);
-        unsigned int startX = (128 - 6*msgLen) / 2;
-        for(x = 0; x < msgLen; x++) {
-            drawChar(startX + 6*x, 50, noRecordsMsg[x], YELLOW, BLACK, 1);
+        unsigned int startX = (128 - 6 * msgLen) / 2;
+        for (x = 0; x < msgLen; x++)
+        {
+            drawChar(startX + 6 * x, 50, noRecordsMsg[x], YELLOW, BLACK, 1);
         }
     }
-    
+
     // Show instruction to go back
-    const char* backMsg = "Press SW3 to go back";
+    const char *backMsg = "Press SW3 to go back";
     unsigned int msgLen = strlen(backMsg);
-    unsigned int startX = (128 - 6*msgLen) / 2;
-    for(x = 0; x < msgLen; x++) {
-        drawChar(startX + 6*x, 110, backMsg[x], WHITE, BLACK, 1);
+    unsigned int startX = (128 - 6 * msgLen) / 2;
+    for (x = 0; x < msgLen; x++)
+    {
+        drawChar(startX + 6 * x, 110, backMsg[x], WHITE, BLACK, 1);
     }
 }
 
-static void displaySettingsMenu(int selectedOption) {
+static void displaySettingsMenu(int selectedOption)
+{
     // Clear screen
-    fillScreen(BLACK);
-    
+
     // Title
-    const char* title = "Settings";
+    const char *title = "Settings";
     unsigned int titleLen = strlen(title);
-    unsigned int titleX = (128 - 6*titleLen) / 2;
+    unsigned int titleX = (128 - 6 * titleLen) / 2;
     unsigned int x;
-    for(x = 0; x < titleLen; x++) {
-        drawChar(titleX + 6*x, 5, title[x], WHITE, BLACK, 1);
+    for (x = 0; x < titleLen; x++)
+    {
+        drawChar(titleX + 6 * x, 5, title[x], WHITE, BLACK, 1);
     }
-    
+
     // Current portion size setting
     char portionStr[30];
-    const char* portionNames[] = {"Small", "Medium", "Large"};
+    const char *portionNames[] = {"Small", "Medium", "Large"};
     sprintf(portionStr, "Portion: %s", portionNames[currentPortionSize]);
     unsigned int len = strlen(portionStr);
-    unsigned int startX = (128 - 6*len) / 2;
-    
-    if(selectedOption == SETTINGS_PORTION_SIZE) {
+    unsigned int startX = (128 - 6 * len) / 2;
+
+    if (selectedOption == SETTINGS_PORTION_SIZE)
+    {
         drawChar(startX - 12, 30, '>', WHITE, BLACK, 1);
     }
-    for(x = 0; x < len; x++) {
-        drawChar(startX + 6*x, 30, portionStr[x], 
-                (selectedOption == SETTINGS_PORTION_SIZE) ? GREEN : WHITE, BLACK, 1);
+    for (x = 0; x < len; x++)
+    {
+        drawChar(startX + 6 * x, 30, portionStr[x],
+                 (selectedOption == SETTINGS_PORTION_SIZE) ? GREEN : WHITE, BLACK, 1);
     }
-    
+
     // Daily feeding limit setting
     char limitStr[30];
     sprintf(limitStr, "Daily Limit: %d", dailyFeedingLimit);
     len = strlen(limitStr);
-    startX = (128 - 6*len) / 2;
-    
-    if(selectedOption == SETTINGS_DAILY_LIMIT) {
+    startX = (128 - 6 * len) / 2;
+
+    if (selectedOption == SETTINGS_DAILY_LIMIT)
+    {
         drawChar(startX - 12, 50, '>', WHITE, BLACK, 1);
     }
-    for(x = 0; x < len; x++) {
-        drawChar(startX + 6*x, 50, limitStr[x], 
-                (selectedOption == SETTINGS_DAILY_LIMIT) ? GREEN : WHITE, BLACK, 1);
+    for (x = 0; x < len; x++)
+    {
+        drawChar(startX + 6 * x, 50, limitStr[x],
+                 (selectedOption == SETTINGS_DAILY_LIMIT) ? GREEN : WHITE, BLACK, 1);
     }
-    
+
     // Back option
-    const char* backStr = "Back";
+    const char *backStr = "Back";
     len = strlen(backStr);
-    startX = (128 - 6*len) / 2;
-    
-    if(selectedOption == SETTINGS_BACK) {
+    startX = (128 - 6 * len) / 2;
+
+    if (selectedOption == SETTINGS_BACK)
+    {
         drawChar(startX - 12, 70, '>', WHITE, BLACK, 1);
     }
-    for(x = 0; x < len; x++) {
-        drawChar(startX + 6*x, 70, backStr[x], 
-                (selectedOption == SETTINGS_BACK) ? GREEN : WHITE, BLACK, 1);
+    for (x = 0; x < len; x++)
+    {
+        drawChar(startX + 6 * x, 70, backStr[x],
+                 (selectedOption == SETTINGS_BACK) ? GREEN : WHITE, BLACK, 1);
     }
-    
+
     // Show current daily feeding status
     char statusStr[30];
     sprintf(statusStr, "Today: %d/%d fed", todayFeedingCount, dailyFeedingLimit);
     len = strlen(statusStr);
-    startX = (128 - 6*len) / 2;
-    for(x = 0; x < len; x++) {
-        drawChar(startX + 6*x, 90, statusStr[x], YELLOW, BLACK, 1);
-    }
-    
-    // Instructions
-    const char* instrStr = "SW3=Select ADC=Change";
-    len = strlen(instrStr);
-    startX = (128 - 6*len) / 2;
-    for(x = 0; x < len; x++) {
-        drawChar(startX + 6*x, 110, instrStr[x], WHITE, BLACK, 1);
+    startX = (128 - 6 * len) / 2;
+    for (x = 0; x < len; x++)
+    {
+        drawChar(startX + 6 * x, 90, statusStr[x], YELLOW, BLACK, 1);
     }
 }
 
-static void handleSettingsNavigation(void) {
+static void handleSettingsNavigation(void)
+{
     int settingsOption = 0;
     int settingsActive = 1;
     int prevADCValue = ReadADCChannel1();
-    
-    while(settingsActive) {
+
+    while (settingsActive)
+    {
         displaySettingsMenu(settingsOption);
-        
+
         // Read ADC for navigation
         unsigned long adcValue1 = ReadADCChannel1();
-        
+
         // Navigate up/down through settings
-        if(adcValue1 > 3000 && prevADCValue <= 3000) {
+        if (adcValue1 > 3000 && prevADCValue <= 3000)
+        {
             settingsOption = (settingsOption > 0) ? settingsOption - 1 : SETTINGS_MENU_ITEMS - 1;
         }
-        else if(adcValue1 < 1000 && prevADCValue >= 1000) {
+        else if (adcValue1 < 1000 && prevADCValue >= 1000)
+        {
             settingsOption = (settingsOption < SETTINGS_MENU_ITEMS - 1) ? settingsOption + 1 : 0;
         }
-        
+
         prevADCValue = adcValue1;
-        
+
         // Handle selection with SW3
-        if(SW3_PRESSED) {
-            switch(settingsOption) {
-                case SETTINGS_PORTION_SIZE:
-                    // Cycle through portion sizes
-                    currentPortionSize = (currentPortionSize + 1) % 3;
-                    delay(50); // Debounce
-                    break;
-                    
-                case SETTINGS_DAILY_LIMIT:
-                    // Cycle through daily limits (1, 2, 3)
-                    dailyFeedingLimit++;
-                    if(dailyFeedingLimit > 3) {
-                        dailyFeedingLimit = 1;
-                    }
-                    delay(50); // Debounce
-                    break;
-                    
-                case SETTINGS_BACK:
-                    settingsActive = 0; // Exit settings menu
-                    break;
+        if (SW3_PRESSED)
+        {
+            switch (settingsOption)
+            {
+            case SETTINGS_PORTION_SIZE:
+                // Cycle through portion sizes
+                currentPortionSize = (currentPortionSize + 1) % 3;
+                delay(5); // Debounce
+                break;
+
+            case SETTINGS_DAILY_LIMIT:
+                // Cycle through daily limits (1, 2, 3)
+                dailyFeedingLimit++;
+                if (dailyFeedingLimit > 3)
+                {
+                    dailyFeedingLimit = 1;
+                }
+                delay(5); // Debounce
+                break;
+
+            case SETTINGS_BACK:
+                settingsActive = 0; // Exit settings menu
+                break;
             }
         }
-        
-        delay(10); // Small delay to prevent too rapid updates
+
+        delay(5); // Small delay to prevent too rapid updates
     }
 }
 
-static void checkDailyFeedingReset(void) {
+static void checkDailyFeedingReset(void)
+{
     unsigned char allregs[7];
-    
+
     // Read current date from DS1307
     DS1307_ReadAllRegs(allregs);
     unsigned char currentDay = bcd_to_dec(allregs[4] & 0x3F);
-    
+
     // If the day has changed, reset the feeding count
-    if(currentDay != lastFeedingDay) {
+    if (currentDay != lastFeedingDay)
+    {
         todayFeedingCount = 0;
         lastFeedingDay = currentDay;
     }
 }
 
-static int canFeedToday(void) {
+static int canFeedToday(void)
+{
     checkDailyFeedingReset();
     return (todayFeedingCount < dailyFeedingLimit);
 }
 
-static void adjustedPulseSpeed(void) {
+static void adjustedPulseSpeed(void)
+{
     int pulseDelay;
-    int numPulses;
-    
+
     // Set pulse parameters based on portion size
-    switch(currentPortionSize) {
-        case PORTION_SMALL:
-            pulseDelay = 1300;  // Small portion - shorter pulse
-            numPulses = 1;      // Single pulse
-            break;
-        case PORTION_MEDIUM:
-            pulseDelay = 1500;  // Medium portion - medium pulse
-            numPulses = 1;      // Single pulse
-            break;
-        case PORTION_LARGE:
-            pulseDelay = 1700;  // Large portion - longer pulse
-            numPulses = 2;      // Double pulse for more food
-            break;
-        default:
-            pulseDelay = 1500;  // Default to medium
-            numPulses = 1;
-            break;
+    switch (currentPortionSize)
+    {
+    case PORTION_SMALL:
+        pulseDelay = 10; // Small portion - shorter pulse
+        break;
+    case PORTION_MEDIUM:
+        pulseDelay = 60; // Medium portion - medium pulse
+        break;
+    case PORTION_LARGE:
+        pulseDelay = 110; // Large portion - longer pulse
+        break;
+    default:
+        pulseDelay = 60; // Default to medium
+        break;
     }
-    
+
     // Execute the feeding pulses
     int i;
-    for(i = 0; i < numPulses; i++) {
-        pulse_speed(pulseDelay);
-        if(numPulses > 1) {
-            delay(50);  // Brief pause between pulses for large portions
-        }
-    }
-    
-    // Return to neutral position
-    delay(80);
-    pulse_speed(2000);
+    pulse_speed(1500);
+    delay(pulseDelay); // Brief pause between pulses for large portions
+    pulse_speed(2100);
 }
