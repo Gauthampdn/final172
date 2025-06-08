@@ -40,22 +40,6 @@ A CC3200-powered “self-serving” pet feeder that lets your dog dispense its m
 
 ## 🎨 Design
 
-### State Machine Diagram
-
-```mermaid
-stateDiagram-v2
-    [*] --> Idle: Power On
-    Idle --> DogActivatedDispense: Pedal Pressed
-    DogActivatedDispense --> DispenseCheck: Validate Limits
-    DispenseCheck --> Dispensing: Conditions OK
-    Dispensing --> Logging: Timestamp & Notify
-    Logging --> Idle
-    DispenseCheck --> Idle: Limits Exceeded / Empty
-    Idle --> LowSupplyAlert: Sensor Trigger
-    LowSupplyAlert --> Notification
-    Notification --> Idle
-```
-
 ### System Architecture
 
 - **Pressure Sensor**: Force-sensitive resistor for pedal detection.
